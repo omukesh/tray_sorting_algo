@@ -315,7 +315,8 @@ def build_grid_kmeans(objs, rows, cols):
             if grid[r][c] is not None:
                 grid[r][c]["row"] = rb
                 grid[r][c]["col"] = c
-                grid[r][c]["slot_id"] = rb * cols + c + 1
+                # grid[r][c]["slot_id"] = rb * cols + c + 1
+                grid[r][c]["slot_id"] = c * rows + rb + 1
 
     return grid, rows, cols
 
@@ -356,7 +357,8 @@ def compute_expected_slot_centers_from_bbox(
         for c in range(cols):
             cx      = int(min_x + (c  + 0.5) * cell_w)
             cy      = int(min_y + (rt + 0.5) * cell_h)
-            slot_id = rb * cols + c + 1
+            # slot_id = rb * cols + c + 1
+            slot_id = c * rows + rb + 1
             centers[slot_id] = (cx, cy)
     return centers
 
@@ -433,7 +435,10 @@ def render_and_save_overlay(
     for r in range(rows):
         for c in range(cols):
 
-            slot_id = (rows - 1 - r) * cols + c + 1
+            # slot_id = (rows - 1 - r) * cols + c + 1
+            rb = rows - 1 - r
+            slot_id = c * rows + rb + 1
+
             cell = grid[r][c]
 
             # =========================

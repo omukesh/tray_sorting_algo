@@ -12,7 +12,7 @@ from tray_analyzer import TrayAnalyzer
 # ── config ──────────────────────────────────────────────────
 MODEL_PATH  = "weights/best.pt"     # ← change to your model path
 TEST_IMAGES = [
-    "input/2.png",
+    "input/9.png",
     # "input/tray2.png",
     # "input/empty_tray.png",
 ]
@@ -37,9 +37,18 @@ def print_matrix(r: dict) -> None:
     occ  = r["occupancy_grid"]
     rows = r["rows"]
     cols = r["cols"]
-    for rb, row_vals in enumerate(occ):
-        slot_ids = [rb * cols + c + 1 for c in range(cols)]
-        print(f"  {slot_ids}  :  {row_vals}")
+    print("\n  --- OCCUPANCY (COLUMN-MAJOR) ---\n")
+
+    for c in range(cols):
+        ids = []
+        vals = []
+
+        for rb in range(rows):
+            sid = c * rows + rb + 1
+            ids.append(sid)
+            vals.append(occ[rb][c])
+
+        print(f"  {ids}  :  {vals}")
     print()
     if r.get("tray_type") == 0 and r.get("blade_elements"):
         print(f"  ⚠️  BLADE(S) IN EMPTY TRAY — slots: {r['blade_elements']}")
