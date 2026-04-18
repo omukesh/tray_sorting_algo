@@ -7,12 +7,12 @@ os.environ["LC_ALL"] = "C"
 
 import cv2
 import json
-from tray_analyzer1 import TrayAnalyzer
+from tray_analyzer import TrayAnalyzer
 
 # ── config ──────────────────────────────────────────────────
 MODEL_PATH  = "weights/best.pt"     # ← change to your model path
 TEST_IMAGES = [
-    "input/1.png",
+    "input/2.png",
     # "input/tray2.png",
     # "input/empty_tray.png",
 ]

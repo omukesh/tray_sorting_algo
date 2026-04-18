@@ -18,6 +18,7 @@ from tray_helpers import (
     decide_layout_and_primary_id,
     detect_aruco_ids_and_first_corners,
     extract_objects_from_result,
+    infer_empty_layout, infer_filled_layout, TRAY_LAYOUTS,
 )
 
 _BASE = Path(__file__).resolve().parent
@@ -47,7 +48,9 @@ class TrayAnalyzer:
         # --------------------------------------------------
         ids, corners = detect_aruco_ids_and_first_corners(img)
 
-        rows, cols, tray_id, tray_type = decide_layout_and_primary_id(ids)
+        # _, _, tray_id, tray_type = decide_layout_and_primary_id(ids)
+
+        tray_id, tray_type = decide_layout_and_primary_id(ids)
 
         tray_fill_status: Optional[int] = 4 if not ids else None
 
@@ -93,6 +96,16 @@ class TrayAnalyzer:
         # 4. OBJECT EXTRACTION
         # --------------------------------------------------
         objs = extract_objects_from_result(detections, H, W)
+
+        if tray_type == 0 and any("blade" in o["cls"] for o in objs):
+            print("⚠️ Warning: blade detected in EMPTY tray")
+
+        if tray_type == 0:  # EMPTY TRAY
+            rows, cols = infer_empty_layout(objs)
+        else:  # FILLING TRAY
+            rows, cols = infer_filled_layout(tray_id, TRAY_LAYOUTS)
+
+        print(f"\n[INFO] Inferred Layout: {rows} x {cols}")
 
         # --------------------------------------------------
         # 5. GRID ASSIGNMENT

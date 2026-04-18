@@ -25,9 +25,9 @@ MISSING_MARK: int = 5
 MIN_CONF = 0.5
 
 TRAY_LAYOUTS: Dict[int, Tuple[int, int]] = {
-    0: (5, 8),
-    1: (6, 9),
-    2: (2, 4),
+    
+    1: (5, 8),
+    2: (5, 8),
     3: (3, 4),
     4: (3, 4),
     5: (3, 3),
@@ -82,6 +82,33 @@ def chord_at_angle(
 # ARUCO + COLOR
 # ============================================================
 
+
+def infer_empty_layout(objs):
+    """
+    Infer empty tray layout based on slot_empty detections
+    """
+
+    total_slots = sum(
+        1 for o in objs if ("slot" in o["cls"] or "blade" in o["cls"])
+    )
+
+    if total_slots >= 50:
+        return (6, 9)
+    elif total_slots >= 30:
+        return (5, 7)
+    elif total_slots >= 18:
+        return (4, 5)
+    else:
+        return (3, 3)
+
+
+def infer_filled_layout(tray_id, TRAY_LAYOUTS):
+    """
+    Get layout from config for filled trays
+    """
+    return TRAY_LAYOUTS.get(tray_id, (5, 8))
+
+
 def detect_aruco_ids_and_first_corners(
     img: np.ndarray,
 ) -> Tuple[List[int], Optional[np.ndarray]]:
@@ -102,52 +129,87 @@ def detect_aruco_ids_and_first_corners(
     return uniq, first
 
 
-def decide_layout_and_primary_id(
-    detected_ids: List[int],
-) -> Tuple[int, int, int, int]:
-    """
-    Returns (rows, cols, tray_id, tray_type).
-    tray_type: 0=empty-tray  1=filled-tray  5=aruco-error
-    """
-    ids_set = set(detected_ids)
+# def decide_layout_and_primary_id(
+#     detected_ids: List[int],
+# ) -> Tuple[int, int, int, int]:
+#     """
+#     Returns (rows, cols, tray_id, tray_type).
+#     tray_type: 0=empty-tray  1=filled-tray  5=aruco-error
+#     """
+#     ids_set = set(detected_ids)
 
+#     if 0 in ids_set:
+#         skus = [i for i in ids_set if i in SKU_IDS and i != 0]
+#         if skus:
+#             sku = skus[0]
+#             rows, cols = TRAY_LAYOUTS.get(sku, TRAY_LAYOUTS[0])
+#             return rows, cols, sku, 0
+
+#     for i in detected_ids:
+#         if i in TRAY_LAYOUTS:
+#             rows, cols = TRAY_LAYOUTS[i]
+#             return rows, cols, i, 1
+
+#     rows, cols = TRAY_LAYOUTS[0]
+#     return rows, cols, 0, 5
+
+def decide_layout_and_primary_id(ids):
+    """
+    Decide tray type and primary ID
+
+    Returns:
+        tray_id, tray_type
+    """
+
+    if not ids:
+        return -1, -1  # no aruco
+
+    ids_set = set(ids)
+
+    # EMPTY tray (has ID 0)
     if 0 in ids_set:
-        skus = [i for i in ids_set if i in SKU_IDS and i != 0]
-        if skus:
-            sku = skus[0]
-            rows, cols = TRAY_LAYOUTS.get(sku, TRAY_LAYOUTS[0])
-            return rows, cols, sku, 0
+        tray_type = 0  # EMPTY
+        # pointer ID = any non-zero
+        pointer_ids = [i for i in ids_set if i != 0]
+        tray_id = pointer_ids[0] if pointer_ids else -1
 
-    for i in detected_ids:
-        if i in TRAY_LAYOUTS:
-            rows, cols = TRAY_LAYOUTS[i]
-            return rows, cols, i, 1
+    else:
+        tray_type = 1  # FILLING
+        tray_id = list(ids_set)[0]
 
-    rows, cols = TRAY_LAYOUTS[0]
-    return rows, cols, 0, 5
+    return tray_id, tray_type
 
 
-def draw_aruco_ids(img: np.ndarray) -> np.ndarray:
-    """Draw ArUco ID numbers in orange at each marker centre (no boundary)."""
+def draw_aruco_ids(img : np.ndarray, color=(255, 255, 255)):
+    """
+    Draw detected ArUco IDs on image
+    """
+
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    ar = cv2.aruco
-    try:
-        dic = ar.getPredefinedDictionary(ar.DICT_4X4_250)
-        det = ar.ArucoDetector(dic, ar.DetectorParameters())
-        corners, ids, _ = det.detectMarkers(gray)
-    except Exception:
-        dic = ar.getPredefinedDictionary(ar.DICT_4X4_250)
-        corners, ids, _ = ar.detectMarkers(gray, dic)  # type: ignore
+    dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    detector = cv2.aruco.ArucoDetector(dictionary)
 
-    if ids is None:
-        return img
-    for c, idv in zip(corners, ids.flatten()):
-        pts = c.reshape(-1, 2).astype(int)
-        cx, cy = int(pts[:, 0].mean()), int(pts[:, 1].mean())
-        cv2.putText(img, f"ID-{idv}", (cx-20, cy-10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 150, 255), 2)
+    corners, ids, _ = detector.detectMarkers(gray)
+
+    if ids is not None:
+        for i, corner in enumerate(corners):
+            pts = corner.reshape((4, 2)).astype(int)
+            cx = int(pts[:, 0].mean())
+            cy = int(pts[:, 1].mean())
+
+            cv2.polylines(img, [pts], True, color, 2)
+
+            cv2.putText(
+                img,
+                str(ids[i][0]),
+                (cx - 10, cy - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                2,
+            )
+
     return img
-
 
 # ============================================================
 # YOLO OBJECT EXTRACTION
@@ -323,12 +385,16 @@ def analyze_grid(
         for c in range(cols):
             cell = grid[rt][c]
             if cell is None:
-                row.append(MISSING_MARK); missing = True
-            elif cell["cls"] == SLOT_CLASS:
+                row.append(MISSING_MARK)
+                missing = True
+
+            elif "slot" in cell["cls"]:
                 row.append(0)
-            else:
+
+            elif "blade" in cell["cls"]:
                 row.append(1)
                 blades.append(cell["slot_id"])
+
                 if is_blade_class(cell["cls"]):
                     widths.append(cell["width"])
         occ.append(row)
@@ -349,52 +415,102 @@ def render_and_save_overlay(
     save_dir: str = SAVE_DIR,
 ) -> str:
     """
-    Overlay visual:
-      green slot-ID  on detected object mask centroid
-      red slot-ID    at expected position for missing inferences
-      orange ArUco IDs
-      cyan chord line for blades
+    Clean operator-friendly overlay:
+      🟢 Slot → number only
+      🟠 Blade → contour + number + width
+      🔴 Missing → box + number
+      🟠 ArUco → orange
     """
-    out  = img.copy()
-    out  = draw_aruco_ids(out)
+
+    out = img.copy()
+
+    # --- Draw ArUco IDs in ORANGE ---
+    out = draw_aruco_ids(out, color=(0, 165, 255))  # orange
+
     rows = len(grid)
     cols = len(grid[0]) if rows else 0
 
     for r in range(rows):
         for c in range(cols):
+
             slot_id = (rows - 1 - r) * cols + c + 1
-            cell    = grid[r][c]
+            cell = grid[r][c]
 
-            if cell:
-                mask_u8 = (cell["mask"] * 255).astype(np.uint8)
-                cnts, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                #color   = (255, 0, 0) if cell["cls"] == SLOT_CLASS else (0, 165, 255)
-                if cell["cls"] == SLOT_CLASS:
-                    color = (255, 0, 0)  # blue for slot
-                else:
-                    color = (0, 165, 255)  
-                
-                    if cnts:
-                        cv2.drawContours(out, cnts, -1, color, 2)
-
-                ys_m, xs_m = np.where(cell["mask"] == 1)
-                cx, cy = (int(xs_m.mean()), int(ys_m.mean())) if xs_m.size else cell["center"]
-                cv2.putText(out, str(slot_id), (cx-12, cy+14),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-                if cell["cls"] != SLOT_CLASS and cell["pA"] and cell["pB"]:
-                    cv2.line(out, cell["pA"], cell["pB"], (0, 255, 255), 2)
-                    mid = ((cell["pA"][0]+cell["pB"][0])//2,
-                           (cell["pA"][1]+cell["pB"][1])//2)
-                    cv2.putText(out, f"{cell['width']:.1f}px", (mid[0]+6, mid[1]-6),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-            else:
+            # =========================
+            # 🔴 MISSING
+            # =========================
+            if cell is None:
                 cx, cy = expected_centers[slot_id]
-                cv2.putText(out, str(slot_id), (cx-12, cy+14),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+                w_box, h_box = 60, 60
+                x1, y1 = int(cx - w_box / 2), int(cy - h_box / 2)
+                x2, y2 = int(cx + w_box / 2), int(cy + h_box / 2)
+
+                cv2.rectangle(out, (x1, y1), (x2, y2), (0, 0, 255), 2)
+
+                cv2.putText(
+                    out, str(slot_id), (x1 + 5, y1 + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2
+                )
+                continue
+
+            cls = cell["cls"]
+
+            # =========================
+            # 🟠 BLADE → contour only
+            # =========================
+            if "blade" in cls:
+
+                mask_u8 = (cell["mask"] * 255).astype(np.uint8)
+                cnts, _ = cv2.findContours(
+                    mask_u8,
+                    cv2.RETR_EXTERNAL,
+                    cv2.CHAIN_APPROX_SIMPLE
+                )
+
+                if cnts:
+                    cv2.drawContours(out, cnts, -1, (0, 165, 255), 2)  # orange
+
+                # width line (only real blades)
+                if (
+                    cls != "blade_generic"
+                    and cell.get("pA") is not None
+                    and cell.get("pB") is not None
+                ):
+                    cv2.line(out, cell["pA"], cell["pB"], (0, 255, 255), 2)
+
+                    mid = (
+                        (cell["pA"][0] + cell["pB"][0]) // 2,
+                        (cell["pA"][1] + cell["pB"][1]) // 2,
+                    )
+
+                    cv2.putText(
+                        out,
+                        f"{cell['width']:.1f}px",
+                        (mid[0] + 6, mid[1] - 6),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (0, 255, 255),
+                        2,
+                    )
+
+            # =========================
+            # 🟢 NUMBER (for all detected)
+            # =========================
+            ys_m, xs_m = np.where(cell["mask"] == 1)
+            if xs_m.size:
+                cx, cy = int(xs_m.mean()), int(ys_m.mean())
+            else:
+                cx, cy = cell["center"]
+
+            cv2.putText(
+                out, str(slot_id), (cx - 12, cy + 14),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
+            )
 
     fname = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_tray{tray_id}_status{status}.jpg"
-    path  = os.path.join(save_dir, fname)
+    path = os.path.join(save_dir, fname)
+
     cv2.imwrite(path, out)
     return path
 
