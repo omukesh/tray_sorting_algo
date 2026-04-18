@@ -1,0 +1,10 @@
+yolo_env/
+__pycache__/
+*.pyc
+*.pt
+*.pth
+*.pkl
+*.jpg
+*.png
+weights/
+outputs/
