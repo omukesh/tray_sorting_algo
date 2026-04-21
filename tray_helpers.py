@@ -27,7 +27,7 @@ MIN_CONF = 0.5
 TRAY_LAYOUTS: Dict[int, Tuple[int, int]] = {
     
     1: (5, 8),
-    2: (5, 8),
+    2: (6, 9),
     3: (3, 4),
     4: (3, 4),
     5: (3, 3),
@@ -38,6 +38,9 @@ TRAY_LAYOUTS: Dict[int, Tuple[int, int]] = {
 
 SKU_IDS: set = set(range(1, 31))
 
+ROI_BOOLEAN = (180, 780, 500, 315)
+ROI_POINTER = (1400, 780, 500, 315)
+
 
 
 # ============================================================
@@ -46,6 +49,11 @@ SKU_IDS: set = set(range(1, 31))
 
 def mask_area(mask: np.ndarray) -> int:
     return int(np.sum(mask == 1))
+
+def is_inside_roi(center, roi):
+    x, y = center
+    rx, ry, rw, rh = roi
+    return (rx <= x <= rx+rw) and (ry <= y <= ry+rh)
 
 def is_blade_class(cls_name: str):
     return cls_name.startswith("blade") and cls_name != "blade_generic"
@@ -109,25 +117,71 @@ def infer_filled_layout(tray_id, TRAY_LAYOUTS):
     return TRAY_LAYOUTS.get(tray_id, (5, 8))
 
 
-def detect_aruco_ids_and_first_corners(
-    img: np.ndarray,
-) -> Tuple[List[int], Optional[np.ndarray]]:
+def detect_aruco_ids_and_first_corners(img: np.ndarray):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ar = cv2.aruco
+
     try:
         dic = ar.getPredefinedDictionary(ar.DICT_4X4_250)
         det = ar.ArucoDetector(dic, ar.DetectorParameters())
         corners, ids, _ = det.detectMarkers(gray)
     except Exception:
         dic = ar.getPredefinedDictionary(ar.DICT_4X4_250)
-        corners, ids, _ = ar.detectMarkers(gray, dic)  # type: ignore
+        corners, ids, _ = ar.detectMarkers(gray, dic)
 
     if ids is None or len(ids) == 0:
         return [], None
-    uniq  = sorted(set(int(i) for i in ids.flatten()))
-    first = corners[0].reshape(-1, 2).astype(int)
-    return uniq, first
 
+    aruco_data = []
+
+    # --------------------------------------------------
+    # STEP 1: FILTER ID 17 + COMPUTE CENTERS
+    # --------------------------------------------------
+    for i, cid in enumerate(ids.flatten()):
+        cid = int(cid)
+
+        if cid == 17:
+            continue  # ❌ BAN ID 17
+
+        pts = corners[i].reshape((4, 2)).astype(int)
+        cx = int(pts[:, 0].mean())
+        cy = int(pts[:, 1].mean())
+
+        aruco_data.append((cid, (cx, cy), corners[i]))
+
+    if not aruco_data:
+        return [], None
+
+    # --------------------------------------------------
+    # STEP 2: ROI VALIDATION
+    # --------------------------------------------------
+    valid_ids = []
+    valid_corners = []
+
+    for aid, center, corner in aruco_data:
+
+        if aid == 0:
+            if is_inside_roi(center, ROI_BOOLEAN):
+                valid_ids.append(aid)
+                valid_corners.append(corner)
+            else:
+                print("⚠️ Boolean ID outside ROI → ignored")
+
+        else:
+            if is_inside_roi(center, ROI_POINTER):
+                valid_ids.append(aid)
+                valid_corners.append(corner)
+            else:
+                print(f"⚠️ Pointer ID {aid} outside ROI → ignored")
+
+    if not valid_ids:
+        print("[DEBUG] No valid ArUco IDs after ROI + filtering")
+        return [], None
+
+    print(f"[DEBUG] Valid ArUco IDs: {valid_ids}")
+
+    first = valid_corners[0].reshape(-1, 2).astype(int)
+    return sorted(set(valid_ids)), first
 
 # def decide_layout_and_primary_id(
 #     detected_ids: List[int],

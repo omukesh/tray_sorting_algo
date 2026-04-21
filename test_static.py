@@ -10,10 +10,10 @@ import json
 from tray_analyzer import TrayAnalyzer
 
 # ── config ──────────────────────────────────────────────────
-MODEL_PATH  = "weights/best.pt"     # ← change to your model path
+MODEL_PATH  = "weights/best.pt"     
 TEST_IMAGES = [
-    "input/9.png",
-    # "input/tray2.png",
+    "input/10.jpg",
+     #"input/6.png",
     # "input/empty_tray.png",
 ]
 WINDOW_W, WINDOW_H = 900, 720
