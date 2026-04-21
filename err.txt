@@ -1,0 +1,378 @@
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git pull
+Already up to date.
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git branch
+  ground-zero-stable
+  main
+  tray_infer
+  tray_infer_row-wise
+* tray_infer_valid
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git branch -r
+  origin/ground-zero-stable
+  origin/main
+  origin/tray_infer
+  origin/tray_infer_row-wise
+  origin/tray_infer_valid
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git push
+^C
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ ^C
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ ^C
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git status
+On branch tray_infer_valid
+Your branch is up to date with 'origin/tray_infer_valid'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   test_static.py
+        modified:   tray_helpers.py
+
+no changes added to commit (use "git add" and/or "git commit -a")
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ python3 test_static.py
+
+▶  input/tray2.png
+⚠️ Boolean ID outside ROI → ignored
+
+--- YOLO CLASS COUNTS ---
+slot_empty: 54
+TOTAL: 54
+
+[INFO] Inferred Layout: 5 x 8
+
+────────────────────────────────────────────────────────────
+  Tray_ID=-1  Mode=UNKNOWN  fill_status=4  count=40
+  blades=[]
+  widths=[]
+────────────────────────────────────────────────────────────
+  rows=5  cols=8
+
+
+  --- OCCUPANCY (COLUMN-MAJOR) ---
+
+  [1, 2, 3, 4, 5]  :  [0, 0, 0, 0, 0]
+  [6, 7, 8, 9, 10]  :  [0, 0, 0, 0, 0]
+  [11, 12, 13, 14, 15]  :  [0, 0, 0, 0, 0]
+  [16, 17, 18, 19, 20]  :  [0, 0, 0, 0, 0]
+  [21, 22, 23, 24, 25]  :  [0, 0, 0, 0, 0]
+  [26, 27, 28, 29, 30]  :  [0, 0, 0, 0, 0]
+  [31, 32, 33, 34, 35]  :  [0, 0, 0, 0, 0]
+  [36, 37, 38, 39, 40]  :  [0, 0, 0, 0, 0]
+
+  Overlay saved → ./tray/20260421_193450_tray-1_status4.jpg
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+  Press any key to continue …
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ python3 test_static.py
+
+▶  input/2.png
+⚠️ Boolean ID outside ROI → ignored
+
+--- YOLO CLASS COUNTS ---
+slot_empty: 47
+blade_generic: 8
+TOTAL: 55
+⚠️ Warning: blade detected in EMPTY tray
+
+[INFO] Inferred Layout: 6 x 9
+
+────────────────────────────────────────────────────────────
+  Tray_ID=2  Mode=EMPTY TRAY  fill_status=1  count=8
+  blades=[37, 20, 15, 33, 51, 22, 40, 29]
+  widths=[]
+────────────────────────────────────────────────────────────
+  rows=6  cols=9
+
+
+  --- OCCUPANCY (COLUMN-MAJOR) ---
+
+  [1, 2, 3, 4, 5, 6]  :  [0, 0, 0, 0, 0, 0]
+  [7, 8, 9, 10, 11, 12]  :  [0, 0, 0, 0, 0, 0]
+  [13, 14, 15, 16, 17, 18]  :  [0, 0, 1, 0, 0, 0]
+  [19, 20, 21, 22, 23, 24]  :  [0, 1, 0, 1, 0, 0]
+  [25, 26, 27, 28, 29, 30]  :  [0, 0, 0, 0, 1, 0]
+  [31, 32, 33, 34, 35, 36]  :  [0, 0, 1, 0, 0, 0]
+  [37, 38, 39, 40, 41, 42]  :  [1, 0, 0, 1, 0, 0]
+  [43, 44, 45, 46, 47, 48]  :  [0, 0, 0, 0, 0, 0]
+  [49, 50, 51, 52, 53, 54]  :  [0, 0, 1, 0, 0, 0]
+
+  ⚠️  BLADE(S) IN EMPTY TRAY — slots: [37, 20, 15, 33, 51, 22, 40, 29]
+     → Operator must remove blade(s) before proceeding.
+
+  Overlay saved → ./tray/20260421_193556_tray2_status1.jpg
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+  Press any key to continue …
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ python3 test_static.py
+
+▶  input/6.png
+⚠️ Boolean ID outside ROI → ignored
+⚠️ Pointer ID 2 outside ROI → ignored
+
+--- YOLO CLASS COUNTS ---
+slot_empty: 41
+blade_generic: 8
+TOTAL: 49
+
+[INFO] Inferred Layout: 5 x 8
+
+────────────────────────────────────────────────────────────
+  Tray_ID=-1  Mode=UNKNOWN  fill_status=4  count=35
+  blades=[26, 22, 13, 28, 19]
+  widths=[]
+────────────────────────────────────────────────────────────
+  rows=5  cols=8
+
+
+  --- OCCUPANCY (COLUMN-MAJOR) ---
+
+  [1, 2, 3, 4, 5]  :  [0, 0, 0, 0, 0]
+  [6, 7, 8, 9, 10]  :  [0, 0, 0, 0, 0]
+  [11, 12, 13, 14, 15]  :  [0, 0, 1, 0, 0]
+  [16, 17, 18, 19, 20]  :  [0, 0, 0, 1, 0]
+  [21, 22, 23, 24, 25]  :  [0, 1, 0, 0, 0]
+  [26, 27, 28, 29, 30]  :  [1, 0, 1, 0, 0]
+  [31, 32, 33, 34, 35]  :  [0, 0, 0, 0, 0]
+  [36, 37, 38, 39, 40]  :  [0, 0, 0, 0, 0]
+
+  Overlay saved → ./tray/20260421_193658_tray-1_status4.jpg
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+  Press any key to continue …
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ python3 test_static.py
+
+▶  input/10.jpg
+⚠️ Boolean ID outside ROI → ignored
+⚠️ Pointer ID 2 outside ROI → ignored
+
+--- YOLO CLASS COUNTS ---
+slot_empty: 47
+blade_generic: 8
+TOTAL: 55
+
+[INFO] Inferred Layout: 5 x 8
+
+────────────────────────────────────────────────────────────
+  Tray_ID=-1  Mode=UNKNOWN  fill_status=4  count=35
+  blades=[26, 12, 22, 28, 19]
+  widths=[]
+────────────────────────────────────────────────────────────
+  rows=5  cols=8
+
+
+  --- OCCUPANCY (COLUMN-MAJOR) ---
+
+  [1, 2, 3, 4, 5]  :  [0, 0, 0, 0, 0]
+  [6, 7, 8, 9, 10]  :  [0, 0, 0, 0, 0]
+  [11, 12, 13, 14, 15]  :  [0, 1, 0, 0, 0]
+  [16, 17, 18, 19, 20]  :  [0, 0, 0, 1, 0]
+  [21, 22, 23, 24, 25]  :  [0, 1, 0, 0, 0]
+  [26, 27, 28, 29, 30]  :  [1, 0, 1, 0, 0]
+  [31, 32, 33, 34, 35]  :  [0, 0, 0, 0, 0]
+  [36, 37, 38, 39, 40]  :  [0, 0, 0, 0, 0]
+
+  Overlay saved → ./tray/20260421_194342_tray-1_status4.jpg
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+  Press any key to continue …
+^C^C^C^Z
+[1]+  Stopped                 python3 test_static.py
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ python3 test_static.py
+[1]+  Killed                  python3 test_static.py
+
+▶  input/10.jpg
+⚠️ Boolean ID outside ROI → ignored
+⚠️ Pointer ID 2 outside ROI → ignored
+[DEBUG] No valid ArUco IDs after ROI + filtering
+
+--- YOLO CLASS COUNTS ---
+slot_empty: 47
+blade_generic: 8
+TOTAL: 55
+
+[INFO] Inferred Layout: 5 x 8
+
+────────────────────────────────────────────────────────────
+  Tray_ID=-1  Mode=UNKNOWN  fill_status=4  count=35
+  blades=[26, 12, 22, 28, 19]
+  widths=[]
+────────────────────────────────────────────────────────────
+  rows=5  cols=8
+
+
+  --- OCCUPANCY (COLUMN-MAJOR) ---
+
+  [1, 2, 3, 4, 5]  :  [0, 0, 0, 0, 0]
+  [6, 7, 8, 9, 10]  :  [0, 0, 0, 0, 0]
+  [11, 12, 13, 14, 15]  :  [0, 1, 0, 0, 0]
+  [16, 17, 18, 19, 20]  :  [0, 0, 0, 1, 0]
+  [21, 22, 23, 24, 25]  :  [0, 1, 0, 0, 0]
+  [26, 27, 28, 29, 30]  :  [1, 0, 1, 0, 0]
+  [31, 32, 33, 34, 35]  :  [0, 0, 0, 0, 0]
+  [36, 37, 38, 39, 40]  :  [0, 0, 0, 0, 0]
+
+  Overlay saved → ./tray/20260421_194617_tray-1_status4.jpg
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+  Press any key to continue …
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ python3 test_static.py
+
+▶  input/10.jpg
+⚠️ Boolean ID outside ROI → ignored
+⚠️ Pointer ID 2 outside ROI → ignored
+[DEBUG] No valid ArUco IDs after ROI + filtering
+
+--- YOLO CLASS COUNTS ---
+slot_empty: 47
+blade_generic: 8
+TOTAL: 55
+
+[INFO] Inferred Layout: 5 x 8
+
+────────────────────────────────────────────────────────────
+  Tray_ID=-1  Mode=UNKNOWN  fill_status=4  count=35
+  blades=[26, 12, 22, 28, 19]
+  widths=[]
+────────────────────────────────────────────────────────────
+  rows=5  cols=8
+
+
+  --- OCCUPANCY (COLUMN-MAJOR) ---
+
+  [1, 2, 3, 4, 5]  :  [0, 0, 0, 0, 0]
+  [6, 7, 8, 9, 10]  :  [0, 0, 0, 0, 0]
+  [11, 12, 13, 14, 15]  :  [0, 1, 0, 0, 0]
+  [16, 17, 18, 19, 20]  :  [0, 0, 0, 1, 0]
+  [21, 22, 23, 24, 25]  :  [0, 1, 0, 0, 0]
+  [26, 27, 28, 29, 30]  :  [1, 0, 1, 0, 0]
+  [31, 32, 33, 34, 35]  :  [0, 0, 0, 0, 0]
+  [36, 37, 38, 39, 40]  :  [0, 0, 0, 0, 0]
+
+  Overlay saved → ./tray/20260421_194715_tray-1_status4.jpg
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+  Press any key to continue …
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ python3 test_static.py
+
+▶  input/10.jpg
+⚠️ Boolean ID outside ROI → ignored
+⚠️ Pointer ID 2 outside ROI → ignored
+[DEBUG] No valid ArUco IDs after ROI + filtering
+
+--- YOLO CLASS COUNTS ---
+slot_empty: 47
+blade_generic: 8
+TOTAL: 55
+
+[INFO] Inferred Layout: 5 x 8
+
+────────────────────────────────────────────────────────────
+  Tray_ID=-1  Mode=UNKNOWN  fill_status=4  count=35
+  blades=[26, 12, 22, 28, 19]
+  widths=[]
+────────────────────────────────────────────────────────────
+  rows=5  cols=8
+
+
+  --- OCCUPANCY (COLUMN-MAJOR) ---
+
+  [1, 2, 3, 4, 5]  :  [0, 0, 0, 0, 0]
+  [6, 7, 8, 9, 10]  :  [0, 0, 0, 0, 0]
+  [11, 12, 13, 14, 15]  :  [0, 1, 0, 0, 0]
+  [16, 17, 18, 19, 20]  :  [0, 0, 0, 1, 0]
+  [21, 22, 23, 24, 25]  :  [0, 1, 0, 0, 0]
+  [26, 27, 28, 29, 30]  :  [1, 0, 1, 0, 0]
+  [31, 32, 33, 34, 35]  :  [0, 0, 0, 0, 0]
+  [36, 37, 38, 39, 40]  :  [0, 0, 0, 0, 0]
+
+  Overlay saved → ./tray/20260421_194734_tray-1_status4.jpg
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+QFontDatabase: Cannot find font directory /home/mdl/Projects/tray_algo/yolo_env/lib/python3.12/site-packages/cv2/qt/fonts.
+Note that Qt no longer ships fonts. Deploy some (from https://dejavu-fonts.github.io/ for example) or switch to fontconfig.
+  Press any key to continue …
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git status
+On branch tray_infer_valid
+Your branch is up to date with 'origin/tray_infer_valid'.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+        modified:   .gitignore
+        modified:   test_static.py
+        modified:   tray_helpers.py
+
+no changes added to commit (use "git add" and/or "git commit -a")
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git add .gitignore 
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git add test_static.py 
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git add tray_helpers.py
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git commit -m "changes in aruco 17 ID logic , shld recheck on this "
+[tray_infer_valid 71324dc] changes in aruco 17 ID logic , shld recheck on this
+ 3 files changed, 65 insertions(+), 13 deletions(-)
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git push
+Enumerating objects: 9, done.
+Counting objects: 100% (9/9), done.
+Delta compression using up to 12 threads
+Compressing objects: 100% (5/5), done.
+Writing objects: 100% (5/5), 1.23 KiB | 1.23 MiB/s, done.
+Total 5 (delta 3), reused 0 (delta 0), pack-reused 0
+remote: Resolving deltas: 100% (3/3), completed with 3 local objects.
+To github.com:omukesh/tray_sorting_algo.git
+   e676a1c..71324dc  tray_infer_valid -> tray_infer_valid
+(yolo_env) mdl@mdl-hal:~/Projects/tray_algo$ git branch -r
+  origin/ground-zero-stable
+  origin/main
+  origin/tray_infer
+  origin/tray_infer_row-wise
