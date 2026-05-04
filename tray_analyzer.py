@@ -118,6 +118,26 @@ class TrayAnalyzer:
         # --------------------------------------------------
         occ, blades, widths, missing = analyze_grid(grid)
 
+        # # NEW: SKU Validation Layer
+        # if tray_type == 1:  # Only for Filling Trays
+        #     expected_cls = EXPECTED_SKU_MAPPING.get(tray_id)
+            
+        #     if expected_cls:
+        #         mismatched_slots = []
+        #         for r in range(rows):
+        #             for c in range(cols):
+        #                 cell = grid[r][c]
+        #                 # If a blade is detected but its class doesn't match the SKU
+        #                 if cell and "blade" in cell["cls"] and cell["cls"] != expected_cls:
+        #                     print(f"❌ SKU MISMATCH at Slot {cell['slot_id']}: "
+        #                         f"Expected {expected_cls}, got {cell['cls']}")
+                            
+        #                     # Force the class to the expected one to maintain count accuracy
+        #                     # while flagging the error for the operator.
+        #                     cell["cls_mismatch"] = True
+        #                     mismatched_slots.append(cell["slot_id"])
+
+
         # --------------------------------------------------
         # 7. STATUS
         # --------------------------------------------------

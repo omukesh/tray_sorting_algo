@@ -24,11 +24,19 @@ PATCH_SIZE: int  = 15
 MISSING_MARK: int = 5
 MIN_CONF = 0.5
 
+# Mapping ArUco Pointer ID -> Expected YOLO Class Name
+EXPECTED_SKU_MAPPING: Dict[int, str] = {
+    1: "blade35046",
+    2: "blade042",
+    3: "blade052",
+    # Add your full catalog here
+}
+
 TRAY_LAYOUTS: Dict[int, Tuple[int, int]] = {
     
     1: (4, 7),
     2: (5, 8),
-    3: (3, 4),
+    3: (5, 8),
     4: (3, 4),
     5: (3, 3),
     6: (2, 4),
