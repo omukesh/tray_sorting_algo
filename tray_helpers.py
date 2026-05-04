@@ -26,8 +26,8 @@ MIN_CONF = 0.5
 
 TRAY_LAYOUTS: Dict[int, Tuple[int, int]] = {
     
-    1: (5, 8),
-    2: (6, 9),
+    1: (4, 7),
+    2: (5, 8),
     3: (3, 4),
     4: (3, 4),
     5: (3, 3),
@@ -93,21 +93,28 @@ def chord_at_angle(
 
 def infer_empty_layout(objs):
     """
-    Infer empty tray layout based on slot_empty detections
+    Arrests the layout based on strict ranges of detected slot_empty or blade_generic.
     """
-
     total_slots = sum(
-        1 for o in objs if ("slot" in o["cls"] or "blade" in o["cls"])
+        1 for o in objs if o["cls"] in ["slot_empty", "blade_generic"]
     )
 
-    if total_slots >= 50:
+    # 6 x 9 = 54 slots (Change: >= 46 to catch 55+ detections)
+    if total_slots >= 46:
         return (6, 9)
-    elif total_slots >= 30:
+    # 5 x 9 = 45 slots
+    elif 41 <= total_slots <= 45:
+        return (5, 9)
+    # 5 x 8 = 40 slots
+    elif 36 <= total_slots <= 40:
+        return (5, 8)
+    # 5 x 7 = 35 slots
+    elif 30 <= total_slots <= 35:
         return (5, 7)
-    elif total_slots >= 18:
-        return (4, 5)
     else:
+        # Fallback for smaller or poorly detected trays
         return (3, 3)
+    
 
 
 def infer_filled_layout(tray_id, TRAY_LAYOUTS):
@@ -132,56 +139,38 @@ def detect_aruco_ids_and_first_corners(img: np.ndarray):
     if ids is None or len(ids) == 0:
         return [], None
 
-    aruco_data = []
+    # --- STEP 1: IMMEDIATELY NEUTRALIZE ID 17 ---
+    ids_flat = ids.flatten()
+    # Create index list for everything that is NOT ID 17
+    keep_idx = [i for i, cid in enumerate(ids_flat) if int(cid) != 17]
 
-    # --------------------------------------------------
-    # STEP 1: FILTER ID 17 + COMPUTE CENTERS
-    # --------------------------------------------------
-    for i, cid in enumerate(ids.flatten()):
-        cid = int(cid)
-
-        if cid == 17:
-            continue  # ❌ BAN ID 17
-
-        pts = corners[i].reshape((4, 2)).astype(int)
-        cx = int(pts[:, 0].mean())
-        cy = int(pts[:, 1].mean())
-
-        aruco_data.append((cid, (cx, cy), corners[i]))
-
-    if not aruco_data:
+    if not keep_idx:
         return [], None
 
-    # --------------------------------------------------
-    # STEP 2: ROI VALIDATION
-    # --------------------------------------------------
+    filtered_ids = ids_flat[keep_idx]
+    filtered_corners = [corners[i] for i in keep_idx]
+
+    # --- STEP 2: ROI VALIDATION ---
     valid_ids = []
     valid_corners = []
 
-    for aid, center, corner in aruco_data:
+    for i, aid in enumerate(filtered_ids):
+        aid = int(aid)
+        pts = filtered_corners[i].reshape((4, 2)).astype(int)
+        cx, cy = int(pts[:, 0].mean()), int(pts[:, 1].mean())
+        center = (cx, cy)
 
-        if aid == 0:
-            if is_inside_roi(center, ROI_BOOLEAN):
-                valid_ids.append(aid)
-                valid_corners.append(corner)
-            else:
-                print("⚠️ Boolean ID outside ROI → ignored")
-
-        else:
-            if is_inside_roi(center, ROI_POINTER):
-                valid_ids.append(aid)
-                valid_corners.append(corner)
-            else:
-                print(f"⚠️ Pointer ID {aid} outside ROI → ignored")
+        if (aid == 0 and is_inside_roi(center, ROI_BOOLEAN)) or \
+           (aid != 0 and is_inside_roi(center, ROI_POINTER)):
+            valid_ids.append(aid)
+            valid_corners.append(filtered_corners[i])
 
     if not valid_ids:
-        print("[DEBUG] No valid ArUco IDs after ROI + filtering")
         return [], None
-
     print(f"[DEBUG] Valid ArUco IDs: {valid_ids}")
 
     first = valid_corners[0].reshape(-1, 2).astype(int)
-    return sorted(set(valid_ids)), first
+    return sorted(list(set(valid_ids))), first
 
 # def decide_layout_and_primary_id(
 #     detected_ids: List[int],
@@ -469,6 +458,8 @@ def render_and_save_overlay(
     status: int,
     expected_centers: Dict[int, Tuple[int, int]],
     save_dir: str = SAVE_DIR,
+    valid_ids: List[int] = [],
+    valid_corners: np.ndarray = None
 ) -> str:
     """
     Clean operator-friendly overlay:
@@ -480,8 +471,17 @@ def render_and_save_overlay(
 
     out = img.copy()
 
+        # --- Draw Blue Boundaries for ArUco ---
+    if valid_ids and valid_corners is not None:
+        for aid in valid_ids:
+            label = f"Boolean ID: 0" if aid == 0 else f"Pointer ID: {aid}"
+            # Change color to Blue (255, 0, 0) for labels
+            cv2.putText(
+                out, label, (50, 50 if aid==0 else 100), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 183, 197), 1
+            )
     # --- Draw ArUco IDs in ORANGE ---
-    out = draw_aruco_ids(out, color=(0, 165, 255))  # orange
+    out = draw_aruco_ids(out, color=(255, 183, 197))  
 
     rows = len(grid)
     cols = len(grid[0]) if rows else 0
