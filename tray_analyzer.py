@@ -97,15 +97,16 @@ class TrayAnalyzer:
         # --------------------------------------------------
         objs = extract_objects_from_result(detections, H, W)
 
-        if tray_type == 0 and any("blade" in o["cls"] for o in objs):
-            print("⚠️ Warning: blade detected in EMPTY tray")
+        is_physically_empty = all(o["cls"] in ["slot_empty", "blade_generic"] for o in objs)
 
-        if tray_type == 0:  # EMPTY TRAY
+        if tray_type == 0 or (tray_type == -1 and is_physically_empty):  # EMPTY TRAY
             rows, cols = infer_empty_layout(objs)
+            if tray_type == -1:
+                tray_type = 0
         else:  # FILLING TRAY
             rows, cols = infer_filled_layout(tray_id, TRAY_LAYOUTS)
 
-        print(f"\n[INFO] Inferred Layout: {rows} x {cols}")
+        print(f"\n[INFO] Mode: {'EMPTY' if tray_type == 0 else 'FILLING'} | Inferred Layout: {rows} x {cols}")
 
         # --------------------------------------------------
         # 5. GRID ASSIGNMENT
@@ -143,6 +144,8 @@ class TrayAnalyzer:
             tray_fill_status,
             expected_centers,
             SAVE_DIR,
+            valid_ids=ids,      # Pass the filtered IDs
+            valid_corners=corners # Pass the first valid corner anchor
         )
 
         # --------------------------------------------------
