@@ -12,7 +12,7 @@ from tray_analyzer import TrayAnalyzer
 # ── config ──────────────────────────────────────────────────
 MODEL_PATH  = "weights/best.pt"     
 TEST_IMAGES = [
-    "input/16.jpg",
+    "input/tray4.png",
      #"input/6.png",
     # "input/empty_tray.png",
 ]

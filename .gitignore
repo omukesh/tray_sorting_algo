@@ -4,5 +4,6 @@ __pycache__/
 *.pt
 *.pth
 *.pkl
+*.jpg
 *.png
 weights/
