@@ -52,7 +52,7 @@ class TrayAnalyzer:
 
         tray_id, tray_type = decide_layout_and_primary_id(ids)
 
-        tray_fill_status: Optional[int] = 4 if not ids else None
+        tray_fill_status: Optional[int] = 4 if tray_type == 5 else None
 
         # --------------------------------------------------
         # 2. YOLO
@@ -99,10 +99,13 @@ class TrayAnalyzer:
 
         is_physically_empty = all(o["cls"] in ["slot_empty", "blade_generic"] for o in objs)
 
-        if tray_type == 0 or (tray_type == -1 and is_physically_empty):  # EMPTY TRAY
+        if tray_type == 5 and is_physically_empty:
+            tray_type = 0 # Re-classify to Empty Tray[cite: 8]
+            tray_id = 99
+        
+        if tray_type == 0:  # EMPTY TRAY
             rows, cols = infer_empty_layout(objs)
-            if tray_type == -1:
-                tray_type = 0
+            
         else:  # FILLING TRAY
             rows, cols = infer_filled_layout(tray_id, TRAY_LAYOUTS)
 
@@ -116,26 +119,7 @@ class TrayAnalyzer:
         # --------------------------------------------------
         # 6. ANALYSIS
         # --------------------------------------------------
-        occ, blades, widths, missing = analyze_grid(grid)
-
-        # # NEW: SKU Validation Layer
-        # if tray_type == 1:  # Only for Filling Trays
-        #     expected_cls = EXPECTED_SKU_MAPPING.get(tray_id)
-            
-        #     if expected_cls:
-        #         mismatched_slots = []
-        #         for r in range(rows):
-        #             for c in range(cols):
-        #                 cell = grid[r][c]
-        #                 # If a blade is detected but its class doesn't match the SKU
-        #                 if cell and "blade" in cell["cls"] and cell["cls"] != expected_cls:
-        #                     print(f"❌ SKU MISMATCH at Slot {cell['slot_id']}: "
-        #                         f"Expected {expected_cls}, got {cell['cls']}")
-                            
-        #                     # Force the class to the expected one to maintain count accuracy
-        #                     # while flagging the error for the operator.
-        #                     cell["cls_mismatch"] = True
-        #                     mismatched_slots.append(cell["slot_id"])
+        occ, blades, widths, missing, missing_elements = analyze_grid(grid)
 
 
         # --------------------------------------------------
@@ -164,8 +148,8 @@ class TrayAnalyzer:
             tray_fill_status,
             expected_centers,
             SAVE_DIR,
-            valid_ids=ids,      # Pass the filtered IDs
-            valid_corners=corners # Pass the first valid corner anchor
+            valid_ids=ids,      
+            valid_corners=corners 
         )
 
         # --------------------------------------------------
@@ -181,4 +165,5 @@ class TrayAnalyzer:
             tray_type,
             tray_fill_status,
             image_path,
+            missing_elements
         )

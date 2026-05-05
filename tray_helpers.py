@@ -213,7 +213,7 @@ def decide_layout_and_primary_id(ids):
     """
 
     if not ids:
-        return -1, -1  # no aruco
+        return 99, 5  # no aruco
 
     ids_set = set(ids)
 
@@ -222,7 +222,7 @@ def decide_layout_and_primary_id(ids):
         tray_type = 0  # EMPTY
         # pointer ID = any non-zero
         pointer_ids = [i for i in ids_set if i != 0]
-        tray_id = pointer_ids[0] if pointer_ids else -1
+        tray_id = pointer_ids[0] if pointer_ids else 99
 
     else:
         tray_type = 1  # FILLING
@@ -430,6 +430,7 @@ def analyze_grid(
     occ:    List[List[int]]  = []
     blades: List[int]        = []
     widths: List[float]      = []
+    missing_elements: List[int] = []
     missing = False
 
     for rb in range(rows):
@@ -437,9 +438,12 @@ def analyze_grid(
         row: List[int] = []
         for c in range(cols):
             cell = grid[rt][c]
+
+            slot_id = c * rows + rb + 1
             if cell is None:
                 row.append(MISSING_MARK)
                 missing = True
+                missing_elements.append(slot_id)
 
             elif "slot" in cell["cls"]:
                 row.append(0)
@@ -452,7 +456,7 @@ def analyze_grid(
                     widths.append(cell["width"])
         occ.append(row)
 
-    return occ, blades, widths, missing
+    return occ, blades, widths, missing, sorted(missing_elements)
 
 
 # ============================================================
@@ -596,6 +600,7 @@ def build_response(
     tray_type: int,
     status:    int,
     img_path:  str,
+    missing_elements,
 ) -> Dict:
     blade_count = len(blades)
     slot_count  = sum(v == 0 for row in occ for v in row)
@@ -606,6 +611,8 @@ def build_response(
     else:
         count = blade_count if blade_count else slot_count
 
+    final_missing = missing_elements if status == 5 else []
+
     return {
         "Tray_ID":          tray_id,
         "tray_type":        tray_type,
@@ -613,7 +620,8 @@ def build_response(
         "count":            count,
         "image_path":       img_path,
         "occupancy_grid":   occ,
-        "blade_elements":   blades,
+        "blade_elements":   sorted(blades),
+        "missing_elements": final_missing,
         "top_view_widths":  widths,
         "rows":             rows,
         "cols":             cols,
