@@ -12,7 +12,7 @@ from tray_analyzer import TrayAnalyzer
 # ── config ──────────────────────────────────────────────────
 MODEL_PATH  = "weights/best.pt"     
 TEST_IMAGES = [
-    "input/14.jpg",
+    "input/16.jpg",
      #"input/6.png",
     # "input/empty_tray.png",
 ]
@@ -30,6 +30,7 @@ def print_matrix(r: dict) -> None:
           f"fill_status={r['tray_fill_status']}  "
           f"count={r['count']}")
     print(f"  blades={r['blade_elements']}")
+    print(f"  missing_elements={r['missing_elements']}")
     print(f"  widths={r['top_view_widths']}")
     print(f"{'─'*60}")
     print(f"  rows={r['rows']}  cols={r['cols']}")
