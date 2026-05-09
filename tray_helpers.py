@@ -17,8 +17,18 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 MISSING_MARK: int = 5
 MIN_CONF: float = 0.5
 
-TRAY_LAYOUTS: Dict[int, Tuple[int, int]] = {
-    1: (4, 7), 2: (5, 8), 3: (5, 8), 4: (3, 4), 5: (3, 3), 6: (2, 4), 7: (3, 4)
+TRAY_LAYOUTS_FILLING = {
+    1: (5, 8),
+    2: (5, 8),
+    3: (5, 8),
+}
+
+# Mapping for EMPTY trays (Pointer ID -> R,C)
+TRAY_LAYOUTS_EMPTY = {
+    1: (6, 9),
+    2: (6, 9),
+    3: (5, 7),
+    4: (4, 7),
 }
 
 ROI_BOOLEAN = (180, 780, 500, 315)
@@ -102,6 +112,14 @@ def decide_layout_and_primary_id(ids: List[int]) -> Tuple[int, int]:
         tray_type = 1
         tray_id = list(ids_set)[0]
     return tray_id, tray_type
+
+def infer_empty_layout_dynamic(objects_count: int) -> Tuple[int, int]:
+    """Fallback if ArUco is missing but tray is physically empty."""
+    if objects_count >= 46: return (6, 9)
+    elif 41 <= objects_count <= 45: return (5, 9)
+    elif 36 <= objects_count <= 40: return (5, 8)
+    elif 30 <= objects_count <= 35: return (5, 7)
+    return (3, 3)
 
 # ============================================================
 # EXTRACTION & GRID

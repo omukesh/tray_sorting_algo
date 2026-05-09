@@ -4,7 +4,7 @@ import numpy as np
 from ultralytics import YOLO
 from tray_helpers import (
     SAVE_DIR, analyze_grid, build_grid_kmeans, build_response, detect_aruco_ids_and_first_corners,
-    decide_layout_and_primary_id, extract_objects_from_result, TRAY_LAYOUTS,
+    decide_layout_and_primary_id, extract_objects_from_result, TRAY_LAYOUTS_EMPTY, TRAY_LAYOUTS_FILLING, infer_empty_layout_dynamic,
     compute_tray_bbox_from_masks, compute_expected_slot_centers_from_bbox, render_and_save_overlay
 )
 
@@ -49,9 +49,15 @@ class TrayAnalyzer:
             tray_type, tray_id = 0, 99
             
         if tray_type == 0:
-            rows, cols = (6, 9) if len(objects) >= 46 else (5, 8)
+            # FIXED PRIMARY: Try to get specific empty layout for this Pointer ID
+            if tray_id in TRAY_LAYOUTS_EMPTY:
+                rows, cols = TRAY_LAYOUTS_EMPTY[tray_id]
+            else:
+                # DYNAMIC FALLBACK: Arrest based on count
+                rows, cols = infer_empty_layout_dynamic(len(objects))
         else:
-            rows, cols = TRAY_LAYOUTS.get(tray_id, (5, 8))
+            # Standard Filling Layout
+            rows, cols = TRAY_LAYOUTS_FILLING.get(tray_id, (5, 8))
 
         grid, rows, cols = build_grid_kmeans(objects, rows, cols)
         occupancy, blades, widths, missing_flag, missing_elements = analyze_grid(grid)
