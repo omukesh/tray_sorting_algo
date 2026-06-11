@@ -2,144 +2,148 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# ==========================================
-# 1. GLOBAL PRODUCTION CONFIGURATION
-# ==========================================
-# Mapping ArUco Pointer IDs to their expected blade classes
-# This acts as your source of truth for Class Enforcement
+# ==============================================================================
+# 🗃️ 1. CORRECTED ROI BOUNDS (Swapped to match physical layout positions)
+# ==============================================================================
+# Format: (X, Y, Width, Height)
+# Pinpointing the bottom-left marker area for the primary SKU Pointer
+ROI_POINTER = (1400, 780, 500, 315)  
+
 SKU_CONFIG = {
-    1: {"name": "blade012", "class_id": 3, "matrix": (8, 5)},
-    2: {"name": "blade022", "class_id": 4, "matrix": (8, 5)},
-    3: {"name": "blade052", "class_id": 6, "matrix": (8, 5)},
-    4: {"name": "blade042", "class_id": 5, "matrix": (7, 4)},
-    5: {"name": "blade072", "class_id": 7, "matrix": (4, 2)},
-    8: {"name": "blade198", "class_id": 8, "matrix": (5, 4)},  # Example from repo plan
+    1: {"name": "blade012",   "class_id": 3},
+    2: {"name": "blade022",   "class_id": 4},
+    3: {"name": "blade052",   "class_id": 6},
+    4: {"name": "blade042",   "class_id": 5},
+    5: {"name": "blade072",   "class_id": 7},
+    8: {"name": "blade22001", "class_id": 8},
+    9: {"name": "blade22002", "class_id": 9},
+    10: {"name": "blade35032", "class_id": 10},
+    11: {"name": "blade35046", "class_id": 11},
 }
 
-# Universal Functional Classes
-CLASS_MAP = {
-    0: "slot_empty",     # Exclusive to Empty Tray
-    1: "blade_generic",   # Exclusive to Empty Tray
-    2: "slot",           # Universal filling tray slot anchor
-}
+def detect_pointer_id(img: np.ndarray, roi: tuple) -> int:
+    """Crops to ROI, scans using 4x4 dictionary, returns ID or -1 if empty."""
+    x, y, w, h = roi
+    H, W = img.shape[:2]
+    
+    x1, y1 = max(0, x), max(0, y)
+    x2, y2 = min(W, x + w), min(H, y + h)
+    
+    roi_crop = img[y1:y2, x1:x2]
+    if roi_crop.size == 0:
+        return -1
 
-def run_advanced_inference(image_path: str, pointer_id: int, is_empty_tray: bool = False):
-    """
-    Advanced production pipeline handling automatic class enforcement, 
-    Non-Maximum Suppression, and performance logging.
-    """
-    # Load Model
+    # Initialize 4x4 ArUco library detector
+    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    aruco_params = cv2.aruco.DetectorParameters()
+    detector = cv2.aruco.ArucoDetector(aruco_dict, aruco_params)
+    
+    corners, ids, _ = detector.detectMarkers(roi_crop)
+    
+    if ids is not None:
+        detected_list = ids.flatten().tolist()
+        # Disregard background interference tags like ID 17
+        filtered_ids = [uid for uid in detected_list if uid != 17]
+        if filtered_ids:
+            return filtered_ids[0]
+            
+    return -1
+
+# ==============================================================================
+# 🚀 2. MANDATORY VERIFICATION PIPELINE
+# ==============================================================================
+def process_strict_roi_mapping(image_path: str):
     model = YOLO("best.pt")
     img = cv2.imread(image_path)
     if img is None:
-        print(f"Error: Could not read image at {image_path}")
+        print(f"❌ Error: Cannot open image frame at '{image_path}'")
         return
 
-    # Run inference
-    results = model(image_path)
+    print(f"\n🔍 Step 1: Mandatorily scanning inside corrected ROI {ROI_POINTER}...")
+    active_id = detect_pointer_id(img, ROI_POINTER)
     
-    # Raw components arrays for NMS processing
-    boxes = []
-    confidences = []
-    class_ids = []
+    # MANDATORY ENFORCEMENT INTERCEPT: No defaults allowed
+    if active_id == -1:
+        print("\n🛑 CRITICAL ERROR: No valid 4x4 ArUco marker found inside the scan zone!")
+        print("Conveyor halt initiated. Please adjust camera framing or check marker placement.")
+        
+        # Draw the failed scan zone box on the image so you can see where it looked
+        cv2.rectangle(img, (ROI_POINTER[0], ROI_POINTER[1]), 
+                      (ROI_POINTER[0]+ROI_POINTER[2], ROI_POINTER[1]+ROI_POINTER[3]), (0, 0, 255), 3)
+        cv2.putText(img, "FAILED SCAN ZONE", (ROI_POINTER[0], ROI_POINTER[1] - 10), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        cv2.imwrite("failed_scan_debug.png", img)
+        return
 
-    # Parse raw YOLO boxes
+    print(f"✅ Success: 4x4 ArUco marker detected. Verified ID: {active_id}")
+
+    meta = SKU_CONFIG.get(active_id)
+    if not meta:
+        print(f"❌ Configuration Error: Detected ID {active_id} has no matching rules inside SKU_CONFIG.")
+        return
+
+    expected_class_id = meta["class_id"]
+    forced_sku_name = meta["name"]
+    print(f"🎯 Target Target Locked: Forcing all blade objects to match SKU -> {forced_sku_name}")
+
+    print("\n🧠 Step 2: Running full frame YOLO inference...")
+    results = model(image_path, verbose=False)
+    
+    raw_boxes = []
+    raw_confidences = []
+    raw_class_ids = []
+
     for box in results[0].boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0])
-        w, h = x2 - x1, y2 - y1
-        conf = float(box.conf[0])
-        cls = int(box.cls[0])
-        
-        boxes.append([x1, y1, w, h])
-        confidences.append(conf)
-        class_ids.append(cls)
+        raw_boxes.append([x1, y1, x2 - x1, y2 - y1])
+        raw_confidences.append(float(box.conf[0]))
+        raw_class_ids.append(int(box.cls[0]))
 
-    # Apply Non-Maximum Suppression to kill double-bounding boxes
-    # score_threshold=0.25, nms_threshold=0.65 to accommodate tightly packed grids
-    indices = cv2.dnn.NMSBoxes(boxes, confidences, score_threshold=0.25, nms_threshold=0.65)
+    indices = cv2.dnn.NMSBoxes(raw_boxes, raw_confidences, score_threshold=0.25, nms_threshold=0.65)
     
-    # Summary Metrics Counters
-    counts = {"valid_slots": 0, "valid_blades": 0, "wrong_sku": 0, "anomalies": 0}
-    
-    # Process only the surviving indices after NMS
-    for idx in indices.flatten():
-        x, y, w, h = boxes[idx]
-        cls_id = class_ids[idx]
-        conf = confidences[idx]
-        
-        # Determine tracking labels based on operational strategy
-        color = (0, 255, 0) # Default Green for verified assets
-        label = "UNKNOWN"
-        is_anomaly = False
+    slots_count = 0
+    blades_count = 0
 
-        if is_empty_tray:
-            # --------------------------------------------------
-            # TRACK A: EMPTY TRAY TRACKER (Only allows 0 and 1)
-            # --------------------------------------------------
-            if cls_id == 0:
-                label = "slot_empty"
-                counts["valid_slots"] += 1
-            elif cls_id == 1:
-                label = "⚠️ CRITICAL: blade_generic"
-                color = (0, 0, 255) # Red warning for remaining components
-                counts["valid_blades"] += 1
-            else:
-                label = f"WRONG TRACK CLASS: {model.names.get(cls_id, cls_id)}"
-                color = (0, 165, 255) # Orange anomaly indicator
-                counts["anomalies"] += 1
-                
-        else:
-            # --------------------------------------------------
-            # TRACK B: FILLING TRAY SKU ENFORCEMENT (2 and Target Class)
-            # --------------------------------------------------
-            target_sku_meta = SKU_CONFIG.get(pointer_id)
-            if not target_sku_meta:
-                print(f"Operational Fail: Pointer ID {pointer_id} unregistered in system config.")
-                return
-
-            expected_cls_id = target_sku_meta["class_id"]
-            expected_sku_name = target_sku_meta["name"]
+    print("\n🔄 Step 3: Processing overrides and mapping coordinates...")
+    if len(indices) > 0:
+        for idx in indices.flatten():
+            x, y, w, h = raw_boxes[idx]
+            cls_id = raw_class_ids[idx]
+            conf = raw_confidences[idx]
+            
+            color = (0, 255, 0)
+            display_label = ""
 
             if cls_id == 2:
-                label = "slot"
-                counts["valid_slots"] += 1
-            elif cls_id == expected_cls_id:
-                label = expected_sku_name
-                counts["valid_blades"] += 1
+                display_label = "slot"
+                slots_count += 1
             elif cls_id in range(3, 12):
-                # Detected a different blade SKU entirely!
-                label = f"❌ WRONG SKU: {model.names.get(cls_id, 'Unknown')}"
-                color = (255, 0, 255) # Magenta highlight for immediate operator intervention
-                counts["wrong_sku"] += 1
+                display_label = forced_sku_name
+                blades_count += 1
             else:
-                label = f"ANOMALY: {model.names.get(cls_id, cls_id)}"
-                color = (0, 165, 255)
-                counts["anomalies"] += 1
+                continue
 
-        # Render Overlays
-        cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
-        cv2.putText(img, f"{label} {conf:.2f}", (x, y - 10), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
+            cv2.putText(img, f"{display_label} {conf:.2f}", (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    # Print Production Telemetry Matrix
-    print("\n" + "="*50)
-    print(f"📊 SYSTEM ENGINE REPORT | MODE: {'EMPTY TRAY' if is_empty_tray else 'FILLING TRAY'}")
-    print(f"📌 ACTIVE POINTER ID REFERENCE: {pointer_id}")
-    print("="*50)
-    for metric, val in counts.items():
-        print(f"🔹 {metric.upper().replace('_', ' ')}: {val}")
-    print("="*50)
+    # Highlight the active scan box area on the output image
+    cv2.rectangle(img, (ROI_POINTER[0], ROI_POINTER[1]), 
+                  (ROI_POINTER[0]+ROI_POINTER[2], ROI_POINTER[1]+ROI_POINTER[3]), (0, 255, 255), 3)
+    cv2.putText(img, f"ROI_POINTER SCAN ZONE (ID: {active_id})", (ROI_POINTER[0], ROI_POINTER[1] - 10), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-    # Save Output
-    cv2.imwrite("tray_output/enforced_output.png", img)
-    print("💾 Analysis rendered successfully onto 'enforced_output.png'.")
+    print("\n" + "="*60)
+    print(f"📊 STRICT PIPELINE SUMMARY")
+    print(f"📌 ACTIVE ARUCO MAPPED: ID {active_id} ----> SKU TYPE: {forced_sku_name}")
+    print("="*60)
+    print(f"🔹 TOTAL FOAM BASE SLOTS      : {slots_count}")
+    print(f"🔹 TOTAL ENFORCED TARGET BLADES: {blades_count}")
+    print("="*60)
 
-# ==========================================
-# 3. PRODUCTION INFERENCE TEST SIMULATOR
-# ==========================================
+    cv2.imwrite("roi_mapped_result.png", img)
+    print("💾 Visual feedback saved successfully to 'roi_mapped_result.png'.\n")
+
 if __name__ == "__main__":
-    image_path = "/home/mdl/Projects/tray_algo/input/tray4.png"
-    
-    # Simulate a system check on a Filling Tray assigned to ArUco Pointer ID #3 
-    # This automatically locks expectations down to look for 'blade052' (Class #6) and 'slot' (Class #2)
-    run_advanced_inference(image_path=image_path, pointer_id=3, is_empty_tray=False)
+    sample_image = "/home/mdl/Projects/tray_algo/input/501.png"
+    process_strict_roi_mapping(image_path=sample_image)
