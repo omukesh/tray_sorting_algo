@@ -1,7 +1,7 @@
 # tray_helpers.py
 from __future__ import annotations
 import os
-import math
+import sqlite3
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -10,41 +10,46 @@ import numpy as np
 from sklearn.cluster import KMeans
 
 # ============================================================
-# CONFIG
+# CONFIG & HARDENED BOUNDS
 # ============================================================
 SAVE_DIR: str = "./tray"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 MISSING_MARK: int = 5
 MIN_CONFIDENCE: float = 0.5
+DB_PATH: str = "tray_config.db"
 
 # Shared ROI Boundaries for ArUco Validation
 ROI_BOOLEAN: Tuple[int, int, int, int] = (180, 780, 500, 315)
 ROI_POINTER: Tuple[int, int, int, int] = (1400, 780, 500, 315)
 
-# Comprehensive Filling Tray Map: Pointer ID -> (rows, cols, expected_blade_class)
-TRAY_LAYOUTS_FILLING: Dict[int, Tuple[int, int, str]] = {
-    1: (5, 8, "blade35046"),
-    2: (5, 8, "blade042"),
-    3: (5, 8, "blade052"),
-    4: (3, 4, "blade012"),
-    5: (3, 3, "blade022"),
-    6: (5, 8, "blade072"),
-    7: (5, 8, "blade22001"),
-    8: (5, 8, "blade22002"),
-    9: (5, 8, "blade35032"),
-}
+# ============================================================
+# PERSISTENT STORAGE DB INTERFACE
+# ============================================================
 
-# Comprehensive Empty Tray Map: Pointer ID -> (rows, cols)
-TRAY_LAYOUTS_EMPTY: Dict[int, Tuple[int, int]] = {
-    1: (6, 9),
-    2: (6, 9),
-    3: (5, 7),
-    4: (4, 7),
-}
+def fetch_tray_config_by_id(aruco_id: int, db_path: str = DB_PATH) -> Optional[Dict]:
+    """Silently fetches structural dimensions and class configurations from SQLite."""
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT sku_name, class_id, ft_rows, ft_cols, et_rows, et_cols 
+            FROM tray_configs 
+            WHERE aruco_id = ?
+        """, (aruco_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception:
+        pass 
+    return None
 
 # ============================================================
-# GEOMETRY & ROTATIONAL WIDTH (MAX CHORD SWEEP)
+# GEOMETRY HELPERS
 # ============================================================
 
 def is_inside_roi(center: Tuple[int, int], roi: Tuple[int, int, int, int]) -> bool:
@@ -53,48 +58,11 @@ def is_inside_roi(center: Tuple[int, int], roi: Tuple[int, int, int, int]) -> bo
     return (rx <= x <= rx + rw) and (ry <= y <= ry + rh)
 
 def is_filling_blade_class(cls_name: str) -> bool:
-    """Returns true if the class belongs to specific filling blades (#3 to #11)."""
-    filling_blades = {
-        "blade012", "blade022", "blade042", "blade052", 
-        "blade072", "blade22001", "blade22002", "blade35032", "blade35046"
-    }
-    return cls_name in filling_blades
-
-def find_max_chord(mask: np.ndarray) -> Tuple[float, Tuple[int, int], Tuple[int, int]]:
-    """
-    Sweeps angles to find the absolute maximum width (chord) of the mask.
-    Replaces static degree configurations with true geometric maxima.
-    """
-    ys, xs = np.where(mask == 1)
-    if xs.size == 0:
-        return 0.0, (0, 0), (0, 0)
-
-    cx, cy = float(xs.mean()), float(ys.mean())
-    H, W = mask.shape
-    max_width, best_p1, best_p2 = 0.0, (0, 0), (0, 0)
-
-    for degree in range(0, 180, 10):
-        theta = math.radians(degree)
-        dx, dy = math.cos(theta), math.sin(theta)
-
-        def march(sign: int) -> Tuple[int, int]:
-            t = 0.0
-            last = (int(cx), int(cy))
-            while True:
-                nx, ny = int(cx + sign * t * dx), int(cy - sign * t * dy)
-                if nx < 0 or nx >= W or ny < 0 or ny >= H or mask[ny, nx] == 0:
-                    return last
-                last, t = (nx, ny), t + 1.0
-
-        p1, p2 = march(1), march(-1)
-        current_w = math.hypot(p1[0] - p2[0], p1[1] - p2[1])
-        if current_w > max_width:
-            max_width, best_p1, best_p2 = current_w, p1, p2
-
-    return round(max_width, 2), best_p1, best_p2
+    """Returns true if the class belongs to any valid system blade variant."""
+    return cls_name.startswith("blade_") and cls_name != "blade_generic"
 
 # ============================================================
-# ARUCO HANDLING
+# HARDENED ARUCO FILTERING LAYER
 # ============================================================
 
 def detect_aruco_ids_and_first_corners(img: np.ndarray):
@@ -104,28 +72,35 @@ def detect_aruco_ids_and_first_corners(img: np.ndarray):
     corners, ids, _ = aruco_detector.detectMarkers(gray)
 
     if ids is None or len(ids) == 0:
-        return [], None
+        return [], []
 
-    valid_ids, valid_corners = [], []
+    valid_ids, valid_corners_list = [], []
     for i, aruco_id in enumerate(ids.flatten()):
-        if int(aruco_id) == 17:  # hard negated
-            continue
+        aid = int(aruco_id)
         
         pts = corners[i].reshape((4, 2)).astype(int)
         center = (int(pts[:, 0].mean()), int(pts[:, 1].mean()))
 
-        if (int(aruco_id) == 0 and is_inside_roi(center, ROI_BOOLEAN)) or \
-           (int(aruco_id) != 0 and is_inside_roi(center, ROI_POINTER)):
-            valid_ids.append(int(aruco_id))
-            valid_corners.append(corners[i])
+        # RULE 1: ID 0 must stay ONLY inside the Boolean ROI
+        if aid == 0:
+            if is_inside_roi(center, ROI_BOOLEAN):
+                valid_ids.append(aid)
+                valid_corners_list.append((pts, center))
+        
+        # RULE 2: IDs 1-31 (EXCEPT 17) must stay ONLY inside the Pointer ROI
+        elif 1 <= aid <= 31 and aid != 17:
+            if is_inside_roi(center, ROI_POINTER):
+                valid_ids.append(aid)
+                valid_corners_list.append((pts, center))
 
     if not valid_ids:
-        return [], None
-    return sorted(list(set(valid_ids))), valid_corners[0].reshape(-1, 2).astype(int)
+        return [], []
+    return valid_ids, valid_corners_list
 
 def decide_layout_and_primary_id(ids: List[int]) -> Tuple[int, int]:
+    """Decides operating mode seamlessly based on strictly filtered active tags."""
     if not ids:
-        return 99, 5  # No ArUco state
+        return 99, 5  # ArUco missing state
 
     ids_set = set(ids)
     if 0 in ids_set:
@@ -157,17 +132,10 @@ def extract_objects_from_result(detections: List[Dict], h: int, w: int) -> List[
         x1, y1, x2, y2 = map(int, det["box"])
         mask = det["mask_array"] if det.get("mask_array") is not None else np.zeros((h, w), dtype=np.uint8)
         
-        width, pA, pB = 0.0, None, None
-        if is_filling_blade_class(det["name"]) or det["name"] == "blade_generic":
-            width, pA, pB = find_max_chord(mask)
-
         objects.append({
             "cls": det["name"],
             "center": ((x1 + x2) // 2, (y1 + y2) // 2),
             "mask": mask,
-            "width": width,
-            "pA": pA,
-            "pB": pB,
             "confidence": det["confidence"]
         })
     return objects
@@ -194,12 +162,12 @@ def build_grid_kmeans(objects: List[Dict], rows: int, cols: int):
     return grid, rows, cols
 
 # ============================================================
-# ANALYSIS WITH EXCLUSIVE CLASS MAPPINGS
+# ANALYSIS WITH SILENT ENVIRONMENT CLASS MAPPINGS
 # ============================================================
 
 def analyze_grid(grid: List[List[Optional[Dict]]], tray_type: int, expected_blade_class: str):
     rows, cols = len(grid), len(grid[0])
-    occupancy, blades, widths, missing_elements = [], [], [], []
+    occupancy, blades, missing_elements = [], [], []
     
     for rb in range(rows):
         rt = rows - 1 - rb
@@ -216,40 +184,32 @@ def analyze_grid(grid: List[List[Optional[Dict]]], tray_type: int, expected_blad
             cls = cell["cls"]
 
             if tray_type == 0:
-                # --- EMPTY TRAY CLAUSE: Strict Enforcement of 0 & 1 Only ---
                 if cls == "slot_empty":
                     row_data.append(0)
                 elif cls == "blade_generic":
                     row_data.append(1)
                     blades.append(slot_id)
-                    widths.append(cell["width"])
                 else:
-                    # Mismatched/Unwanted classes inside an empty tray marked as slot_empty fallback
                     row_data.append(0)
             else:
-                # --- FILLING TRAY CLAUSE: Strict Enforcement of 2 & expected_blade_class ---
                 if cls == "slot":
                     row_data.append(0)
                 elif cls == expected_blade_class:
                     row_data.append(1)
                     blades.append(slot_id)
-                    widths.append(cell["width"])
                 elif is_filling_blade_class(cls):
-                    # WRONG SKU Placement matching clause
                     row_data.append(1)
                     blades.append(slot_id)
-                    widths.append(cell["width"])
-                    cell["wrong_sku_triggered"] = True
                 else:
                     row_data.append(0)
                     
             cell["computed_slot_id"] = slot_id
         occupancy.append(row_data)
         
-    return occupancy, blades, widths, len(missing_elements) > 0, sorted(missing_elements)
+    return occupancy, blades, len(missing_elements) > 0, sorted(missing_elements)
 
 # ============================================================
-# RENDER & EXPORTS
+# RENDER & OVERLAYS (With thin ROI lines & clean Text alignments)
 # ============================================================
 
 def compute_tray_bbox_from_masks(objects: List[Dict], H: int, W: int):
@@ -257,7 +217,8 @@ def compute_tray_bbox_from_masks(objects: List[Dict], H: int, W: int):
     for o in objects:
         ys_m, xs_m = np.where(o["mask"] == 1)
         if xs_m.size:
-            xs.extend(xs_m.tolist()); ys.extend(ys_m.tolist())
+            xs.extend(xs_m.tolist())
+            ys.extend(ys_m.tolist())
     if not xs: return (0, 0, W, H)
     min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
     dx, dy = int((max_x - min_x) * 0.05), int((max_y - min_y) * 0.05)
@@ -274,44 +235,62 @@ def compute_expected_slot_centers_from_bbox(rows: int, cols: int, bbox: Tuple[in
             centers[slot_id] = (int(min_x + (c + 0.5) * cell_w), int(min_y + (rt + 0.5) * cell_h))
     return centers
 
-def render_and_save_overlay(img, grid, tray_id, status, centers, save_dir, valid_ids, corners):
+def render_and_save_overlay(img, grid, tray_id, status, centers, save_dir, valid_ids, corners_meta):
+    """
+    Renders high-precision manufacturing metrics directly to the output frame array.
+    Awkward ROI boundary lines have been stripped to keep visuals pristine.
+    """
     out = img.copy()
-    if valid_ids:
-        for aid in valid_ids:
-            label = "Boolean ID: 0" if aid == 0 else f"Pointer ID: {aid}"
-            cv2.putText(out, label, (50, 50 if aid == 0 else 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 183, 197), 1)
 
+    # 1. RENDER ARUCO IDS DIRECTLY ABOVE PHYSICAL MARKER COORDINATES
+    if corners_meta:
+        for pts, center in corners_meta:
+            # Locate the top-most y coordinate of the physical marker to place text cleanly above it
+            top_y = int(np.min(pts[:, 1]))
+            top_x = int(pts[np.argmin(pts[:, 1]), 0])
+            
+            # Identify ID type safely based on spatial coordinate layout
+            matched_id = 0 if is_inside_roi(center, ROI_BOOLEAN) else tray_id
+            label = f"ID: {matched_id}"
+            
+            # Place tag text directly above the ArUco bounding frame
+            cv2.putText(out, label, (top_x - 15, top_y - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            cv2.polylines(out, [pts], True, (0, 255, 0), 1)
+
+    # 2. RUN GLOBAL MATRIX INDICATOR DRAW LOOPS
     rows, cols = len(grid), len(grid[0])
     for r in range(rows):
         for c in range(cols):
-            rb = rows - 1 - r; slot_id = c * rows + rb + 1; cell = grid[r][c]
-            if cell is None:
-                cx, cy = centers.get(slot_id, (0, 0))
-                cv2.rectangle(out, (cx-30, cy-30), (cx+30, cy+30), (0, 0, 255), 2)
-                cv2.putText(out, str(slot_id), (cx-25, cy-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            rb = rows - 1 - r
+            slot_id = c * rows + rb + 1
+            cell = grid[r][c] 
+            
+            # Missing Cell Allocation: Render standard red validation indicator box
+            if cell is None: 
+                cx, cy = centers.get(slot_id, (0, 0)) 
+                cv2.rectangle(out, (cx - 30, cy - 30), (cx + 30, cy + 30), (0, 0, 255), 1) 
+                cv2.putText(out, str(slot_id), (cx - 25, cy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2) 
                 continue
             
-            # Use specific color scheme based on accurate conditions
-            if "blade" in cell["cls"]:
-                contour_color = (255, 0, 255) if cell.get("wrong_sku_triggered") else (0, 165, 255)
-                contours, _ = cv2.findContours((cell["mask"]*255).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # Blade Element Content Allocation: Extract mask geometries and draw crisp thin contours
+            if "blade" in cell["cls"]: 
+                contour_color = (0, 165, 255)  # Production Orange contour line for full trace visibility
+                contours, _ = cv2.findContours((cell["mask"] * 255).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) 
                 cv2.drawContours(out, contours, -1, contour_color, 1)
                 
-                if cell["pA"] and cell["pB"] and not cell.get("wrong_sku_triggered"):
-                    cv2.line(out, cell["pA"], cell["pB"], (0, 255, 255), 1)
-                    cv2.putText(out, f"{cell['width']:.1f}px", cell["pA"], cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
-                    
-            cv2.putText(out, str(slot_id), (cell["center"][0]-12, cell["center"][1]+14), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            # Render the permanent spatial grid ID right at the object's computed center coordinate
+            cv2.putText(out, str(slot_id), (cell["center"][0] - 12, cell["center"][1] + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
+    # 3. SAVE AND EXPORT THE COMPILED VISUAL INSPECTION FRAME
     path = os.path.join(save_dir, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_tray{tray_id}_status{status}.jpg")
     cv2.imwrite(path, out)
     return path
 
-def build_response(occupancy, blades, widths, tray_id, rows, cols, tray_type, status, path, missing_elements):
+def build_response(occupancy, blades, tray_id, rows, cols, tray_type, status, path, missing_elements):
     count = len(blades) if status == 1 else sum(v == 0 for row in occupancy for v in row)
     return {
         "Tray_ID": tray_id, "tray_type": tray_type, "tray_fill_status": status, "count": count,
         "image_path": path, "occupancy_grid": occupancy, "blade_elements": sorted(blades),
-        "missing_elements": missing_elements if status == 5 else [], "top_view_widths": widths,
+        "missing_elements": missing_elements if status == 5 else [],
         "rows": rows, "cols": cols
     }

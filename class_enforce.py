@@ -164,5 +164,5 @@ def process_new_classes_mapping(image_path: str):
 
 if __name__ == "__main__":
     # Test path setting configuration
-    sample_image = "/home/mdl/Videos/mukesh/tray_sorting_algo/input/15.png"
+    sample_image = "/home/mdl/Videos/mukesh/tray_sorting_algo/input/7.png"
     process_new_classes_mapping(image_path=sample_image)
