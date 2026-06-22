@@ -42,15 +42,22 @@ class TrayAnalyzer:
             else:
                 raw_masks.append(None)
 
-        # Apply standard NMS deduplication to fix duplicate counting anomalies [cite: 11]
+        # Apply standard NMS deduplication to fix duplicate counting anomalies
         indices = cv2.dnn.NMSBoxes(raw_boxes, raw_confidences, score_threshold=0.25, nms_threshold=0.65)
         
         detections = []
         db_config = fetch_tray_config_by_id(tray_id)
         
-        expected_blade_class = "blade_generic"
+        # Determine target profile SKU name from SQLite ground truth mapping securely
         if db_config:
             expected_blade_class = db_config["sku_name"]
+        else:
+            # FALLBACK STRATEGY: If database drops connection or lookup key is empty on a filling tray,
+            # route it straight to missing_inference_void rather than letting blade_generic bleed in!
+            if tray_type == 1:
+                expected_blade_class = "missing_inference_void"
+            else:
+                expected_blade_class = "blade_generic"
 
         # 3. SILENT CLASS ENFORCEMENT ON INDEPENDENT DETECTIONS ONLY
         if len(indices) > 0:
@@ -62,7 +69,7 @@ class TrayAnalyzer:
                 
                 raw_cls_name = results.names[cls_id]
                 
-                # Intercept blade indices (3-21) and enforce ground truth configuration [cite: 14]
+                # Intercept blade indices (3-21) and enforce ground truth configurations first
                 if cls_id in range(3, 22):
                     if tray_type == 1:
                         final_name = expected_blade_class
@@ -79,7 +86,7 @@ class TrayAnalyzer:
                 
                 if mask_raw is not None:
                     mask_resized = cv2.resize(mask_raw, (W, H), interpolation=cv2.INTER_NEAREST)
-                    det["mask_array"] = (mask_resized > 0.5).astype("uint8") 
+                    det["mask_array"] = (mask_resized > 0.5).astype("uint8")
                 else:
                     det["mask_array"] = None
                     
@@ -87,7 +94,7 @@ class TrayAnalyzer:
 
         # 4. OBJECT EXTRACTION
         objects = extract_objects_from_result(detections, H, W)
-        is_physically_empty = all(o["cls"] in ["slot_empty", "blade_generic"] for o in objects) 
+        is_physically_empty = all(o["cls"] in ["slot_empty", "blade_generic"] for o in objects)
         
         if tray_type == 5 and is_physically_empty:
             tray_type, tray_id = 0, 99  
@@ -105,8 +112,6 @@ class TrayAnalyzer:
                 r_val, c_val = (5, 8)
 
         # SAFETY LAYER: Enforce stable column-major sorting layout matching input/11.png.
-        # If your layout database entry is configured transposed (Rows > Columns),
-        # this swaps them back to protect your downstream K-Means array indexing mappings.
         if r_val > c_val:
             rows, cols = c_val, r_val
         else:

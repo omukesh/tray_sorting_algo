@@ -6,4 +6,6 @@ __pycache__/
 *.pkl
 *.jpg
 *.png
-weights/
+opt/ 
+tray/
+tray_output/
