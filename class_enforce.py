@@ -3,7 +3,7 @@ import numpy as np
 from ultralytics import YOLO
 
 # ==============================================================================
-# 🗃️ 1. PRODUCTION SKU CONFIGURATION MATRIX (Aligned & Bug-Free)
+#  1. PRODUCTION SKU CONFIGURATION MATRIX (Aligned & Bug-Free)
 # ==============================================================================
 # Precision cropping zone for the bottom-left primary SKU Pointer marker
 ROI_POINTER = (1400, 780, 500, 315)  
@@ -61,21 +61,21 @@ def detect_pointer_id(img: np.ndarray, roi: tuple) -> int:
     return -1
 
 # ==============================================================================
-# 🚀 2. CLEAN CORE ENFORCEMENT ENGINE
+#  2. CLEAN CORE ENFORCEMENT ENGINE
 # ==============================================================================
 def process_new_classes_mapping(image_path: str):
     model = YOLO("best.pt")
     img = cv2.imread(image_path)
     if img is None:
-        print(f"❌ Error: Cannot open target image frame at '{image_path}'")
+        print(f" Error: Cannot open target image frame at '{image_path}'")
         return
 
-    print(f"\n🔍 Step 1: Performing mandatory scan within ROI_POINTER box {ROI_POINTER}...")
+    print(f"\n Step 1: Performing mandatory scan within ROI_POINTER box {ROI_POINTER}...")
     active_id = detect_pointer_id(img, ROI_POINTER)
     
     # STRICT BLOCK INTERCEPT: Execution halts completely if ArUco scan fails
     if active_id == -1:
-        print("\n🛑 CRITICAL COMPLIANCE ERROR: No valid 4x4 ArUco tag discovered inside scan bounds!")
+        print("\n CRITICAL COMPLIANCE ERROR: No valid 4x4 ArUco tag discovered inside scan bounds!")
         print("Halting process tracking to prevent unmapped engine runs.")
         
         # Output an error visual block to quickly verify camera framing alignment
@@ -86,17 +86,17 @@ def process_new_classes_mapping(image_path: str):
         cv2.imwrite("failed_scan_debug.png", img)
         return
 
-    print(f"✅ Success: 4x4 ArUco marker isolated. Verified ID: {active_id}")
+    print(f" Success: 4x4 ArUco marker isolated. Verified ID: {active_id}")
 
     meta = SKU_CONFIG.get(active_id)
     if not meta:
-        print(f"❌ Configuration Error: Detected ID {active_id} matches no schema options inside SKU_CONFIG.")
+        print(f" Configuration Error: Detected ID {active_id} matches no schema options inside SKU_CONFIG.")
         return
 
     forced_sku_name = meta["name"]
-    print(f"🎯 Strategy Locked: Mapping all blade detections to class SKU -> {forced_sku_name}")
+    print(f" Strategy Locked: Mapping all blade detections to class SKU -> {forced_sku_name}")
 
-    print("\n🧠 Step 2: Executing deep frame parsing...")
+    print("\n Step 2: Executing deep frame parsing...")
     results = model(image_path, verbose=False)
     
     raw_boxes = []
@@ -116,7 +116,7 @@ def process_new_classes_mapping(image_path: str):
     blades_count = 0
 
     print("\n" + "═"*60)
-    print("🔄 Step 3: Running Global Mapping Translation...")
+    print("Step 3: Running Global Mapping Translation...")
     print("═"*60)
     
     if len(indices) > 0:
@@ -152,15 +152,15 @@ def process_new_classes_mapping(image_path: str):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
     print("\n" + "="*60)
-    print(f"📊 SYSTEM ENGINE PERFORMANCE TELEMETRY")
-    print(f"📌 ARUCO LOOKUP KEY DETECTED : ID {active_id} ──> RULE SET: {forced_sku_name}")
+    print(f"SYSTEM ENGINE PERFORMANCE TELEMETRY")
+    print(f" ARUCO LOOKUP KEY DETECTED : ID {active_id} ──> RULE SET: {forced_sku_name}")
     print("="*60)
     print(f"🔹 TOTAL FOAM BASE SLOTS      : {slots_count}")
     print(f"🔹 TOTAL TARGET BLADES MAPPED : {blades_count}")
     print("="*60)
 
     cv2.imwrite("roi_mapped_result.png", img)
-    print("💾 Process complete. Clean validation frame rendered safely to 'roi_mapped_result.png'.\n")
+    print(" Process complete. Clean validation frame rendered safely to 'roi_mapped_result.png'.\n")
 
 if __name__ == "__main__":
     # Test path setting configuration
