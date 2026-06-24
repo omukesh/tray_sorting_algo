@@ -8,7 +8,7 @@ CSV_FILE_PATH = "Blade_data_aruco_classes - Sheet2.csv"
 
 def init_and_seed_sqlite():
     if not os.path.exists(CSV_FILE_PATH):
-        print(f"❌ Error: Targeted CSV file '{CSV_FILE_PATH}' not found in active directory.")
+        print(f" Error: Targeted CSV file '{CSV_FILE_PATH}' not found in active directory.")
         return
 
     try:
@@ -31,7 +31,7 @@ def init_and_seed_sqlite():
             );
         """)
         
-        print("📋 Old table dropped and fresh SQLite table schema initialized successfully.")
+        print(" Old table dropped and fresh SQLite table schema initialized successfully.")
 
         # 3. PARSE DATA ROWS FROM CSV
         with open(CSV_FILE_PATH, mode='r', encoding='utf-8-sig') as f:
@@ -73,9 +73,9 @@ def init_and_seed_sqlite():
 
         conn.commit()
         conn.close()
-        print(f"🚀 Successfully seeded {rows_inserted} fresh records into local '{DB_PATH}' file.")
+        print(f" Successfully seeded {rows_inserted} fresh records into local '{DB_PATH}' file.")
     except Exception as e:
-        print(f"🛑 Failed to execute database synchronization sequence: {str(e)}")
+        print(f" Failed to execute database synchronization sequence: {str(e)}")
 
 if __name__ == "__main__":
     init_and_seed_sqlite()

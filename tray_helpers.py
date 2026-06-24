@@ -24,13 +24,9 @@ MISSING_MARK: int = 5
 MIN_CONFIDENCE: float = 0.5
 DB_PATH: str = "tray_config.db"
 
-# Shared ROI Boundaries for ArUco Validation
 ROI_BOOLEAN: Tuple[int, int, int, int] = (180, 780, 500, 315)
 ROI_POINTER: Tuple[int, int, int, int] = (1400, 780, 500, 315)
 
-# ============================================================
-# PERSISTENT LOCAL STORAGE DB INTERFACE
-# ============================================================
 
 def fetch_tray_config_by_id(aruco_id: int, db_path: str = DB_PATH) -> Optional[Dict]:
     """Fetches dimensions and part details strictly using local SQLite file."""
@@ -53,10 +49,6 @@ def fetch_tray_config_by_id(aruco_id: int, db_path: str = DB_PATH) -> Optional[D
         pass 
     return None
 
-# ============================================================
-# GEOMETRY HELPERS
-# ============================================================
-
 def is_inside_roi(center: Tuple[int, int], roi: Tuple[int, int, int, int]) -> bool:
     x, y = center
     rx, ry, rw, rh = roi
@@ -64,10 +56,6 @@ def is_inside_roi(center: Tuple[int, int], roi: Tuple[int, int, int, int]) -> bo
 
 def is_filling_blade_class(cls_name: str) -> bool:
     return cls_name.startswith("blade_") and cls_name != "blade_generic"
-
-# ============================================================
-# HARDENED ARUCO FILTERING LAYER
-# ============================================================
 
 def detect_aruco_ids_and_first_corners(img: np.ndarray):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -112,9 +100,6 @@ def decide_layout_and_primary_id(ids: List[int]) -> Tuple[int, int]:
 
     return tray_id, tray_type
 
-# ============================================================
-# PROCESSING & EXTRACTION
-# ============================================================
 
 def extract_objects_from_result(detections: List[Dict], h: int, w: int) -> List[Dict]:
     objects = []
@@ -153,9 +138,6 @@ def build_grid_kmeans(objects: List[Dict], rows: int, cols: int):
                 grid[r][c]["slot_id"] = c * rows + (rows - 1 - r) + 1
     return grid, rows, cols
 
-# ============================================================
-# GRID ANALYSIS AND EVALUATION PASS
-# ============================================================
 
 def analyze_grid(grid: List[List[Optional[Dict]]], tray_type: int, expected_blade_class: str):
     rows, cols = len(grid), len(grid[0])
@@ -203,9 +185,6 @@ def analyze_grid(grid: List[List[Optional[Dict]]], tray_type: int, expected_blad
         
     return occupancy, blades, len(missing_elements) > 0, sorted(missing_elements)
 
-# ============================================================
-# BOUNDING AND RENDERING HELPERS
-# ============================================================
 
 def compute_tray_bbox_from_masks(objects: List[Dict], H: int, W: int):
     xs, ys = [], []

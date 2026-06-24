@@ -16,7 +16,7 @@ from tray_helpers import (
     compute_tray_bbox_from_masks, 
     compute_expected_slot_centers_from_bbox, 
     render_and_save_overlay,
-    fetch_tray_config_by_id  # Reads local SQLite record sets safely
+    fetch_tray_config_by_id  
 )
 
 class TrayAnalyzer:
@@ -29,11 +29,9 @@ class TrayAnalyzer:
             raise FileNotFoundError(f"Cannot read image file: {image_path}")
         H, W = img.shape[:2]
 
-        # 1. LOCAL ARUCO VALIDATION PASSTHROUGH
         valid_ids, corners_meta = detect_aruco_ids_and_first_corners(img)
         tray_id, tray_type = decide_layout_and_primary_id(valid_ids)
         
-        # 2. OBJECT DETECTION & PASS TO NMS
         results = self.model(img, verbose=False)[0]
         
         raw_boxes = []
@@ -54,7 +52,6 @@ class TrayAnalyzer:
         indices = cv2.dnn.NMSBoxes(raw_boxes, raw_confidences, score_threshold=0.25, nms_threshold=0.65)
         detections = []
         
-        # 3. LOCALIZE STRUCTURAL RULES VIA SQLITE RECORD SETS
         db_config = fetch_tray_config_by_id(tray_id)
         
         if db_config:
@@ -64,7 +61,6 @@ class TrayAnalyzer:
             resolved_part_number = "UNKNOWN"
             expected_blade_class = "missing_inference_void" if tray_type == 1 else "blade_generic"
 
-        # 4. SILENT CLASS ENFORCEMENT PASSTHROUGH Pass
         if len(indices) > 0:
             for idx in indices.flatten():
                 x, y, w, h = raw_boxes[idx]
@@ -93,14 +89,12 @@ class TrayAnalyzer:
                     
                 detections.append(det)
 
-        # 5. EXTRACTION LOOP
         objects = extract_objects_from_result(detections, H, W)
         is_physically_empty = all(o["cls"] in ["slot_empty", "blade_generic"] for o in objects)
         
         if tray_type == 5 and is_physically_empty:
             tray_type, tray_id = 0, 99  
             
-        # 6. EXPLICIT MATRIX EXTRACTION DIRECT FROM SCHEMA COLUMNS
         if db_config:
             if tray_type == 0:
                 r_val, c_val = db_config["et_rows"], db_config["et_cols"]
@@ -109,7 +103,6 @@ class TrayAnalyzer:
         else:
             r_val, c_val = (5, 8)
 
-        # STABILIZATION LAYER: Pivot matrix if rows > columns to maintain major sorting logic maps
         if r_val > c_val:
             rows, cols = c_val, r_val
         else:
@@ -117,23 +110,18 @@ class TrayAnalyzer:
 
         print(f"[INFO] Mode: {'EMPTY' if tray_type == 0 else 'FILLING'} | Part Number: {resolved_part_number} | Matrix Locked: {rows}x{cols}")
 
-        # 7. KMEANS PARSING
         grid, rows, cols = build_grid_kmeans(objects, rows, cols)
         
-        # 8. PROCESS GRID MATRIX INDICATORS
         occupancy, blades, missing_flag, missing_elements = analyze_grid(grid, tray_type, expected_blade_class)
         tray_fill_status = 4 if tray_type == 5 else (5 if missing_flag else (1 if blades else 0))
 
-        # 9. GEOMETRIC CENTERS
         tray_bbox = compute_tray_bbox_from_masks(objects, H, W)
         expected_centers = compute_expected_slot_centers_from_bbox(rows, cols, tray_bbox)
         
-        # 10. GENERATE DRAWING OVERLAY FILE
         actual_path = render_and_save_overlay(
             img, grid, tray_id, tray_fill_status, expected_centers, SAVE_DIR, valid_ids, corners_meta
         )
 
-        # 11. OUTPUT DATA PACKET UNIFIED WITH LOCAL DEFINITIONS
         response = build_response(
             occupancy, blades, tray_id, rows, cols, 
             tray_type, tray_fill_status, actual_path, missing_elements, resolved_part_number
