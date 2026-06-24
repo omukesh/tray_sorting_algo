@@ -1,55 +1,81 @@
+# config_db.py
+import csv
+import os
 import sqlite3
 
-def init_configuration_database(db_path: str = "tray_config.db"):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    
-    # 1. Create the persistent configuration scheme
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tray_configs (
-            aruco_id INTEGER PRIMARY KEY,
-            sku_name TEXT NOT NULL,
-            class_id INTEGER NOT NULL,
-            ft_rows INTEGER NOT NULL,
-            ft_cols INTEGER NOT NULL,
-            et_rows INTEGER NOT NULL,
-            et_cols INTEGER NOT NULL
-        )
-    """)
-    
-    # 2. Complete, aligned production config matrix (Renamed 22-class setup)
-    production_matrix = [
-        (1,  "blade_hpcr012",    3,  8, 5, 6, 9),
-        (2,  "blade_hpcr022",    4,  8, 5, 6, 9),
-        (3,  "blade_hpcr032",    5,  8, 5, 6, 9),
-        (4,  "blade_hpcr042",    5,  8, 5, 6, 9),
-        (5,  "blade_hpcr052",    6,  8, 5, 6, 9),
-        (7,  "blade_hpcr072",    7,  8, 5, 6, 9),
-        (10, "blade_hpcs001",    8,  8, 5, 6, 9),
-        (11, "blade_hpcs002",    9,  8, 5, 6, 9),
-        (13, "blade_hpcs004",    10, 8, 5, 6, 9),
-        (14, "blade_hpcs005",    11, 8, 5, 6, 9),
-        (15, "blade_hpcs006",    12, 8, 5, 6, 9),
-        (16, "blade_hpcs007",    13, 8, 5, 6, 9),
-        (18, "blade_hpcs008",    14, 8, 5, 6, 9),
-        (19, "blade_hpcs009",    15, 8, 5, 6, 9),
-        (20, "blade_hpcs011",    16, 8, 5, 6, 9),
-        (30, "blade_hptr020",    17, 4, 7, 5, 7),
-        (22, "blade_lpcr046",    18, 4, 7, 6, 9),
-        (23, "blade_lpcr35032",  19, 8, 5, 6, 9),
-        (24, "blade_lpcr35046",  20, 8, 5, 6, 9),
-        (31, "blade_lptr050",    21, 4, 7, 5, 7)
-    ]
-    
-    cursor.executemany("""
-        INSERT OR REPLACE INTO tray_configs 
-        (aruco_id, sku_name, class_id, ft_rows, ft_cols, et_rows, et_cols)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, production_matrix)
-    
-    conn.commit()
-    conn.close()
-    print("SQLite Config Matrix initialized securely with zero drift bounds.")
+DB_PATH = "tray_config.db"
+CSV_FILE_PATH = "Blade_data_aruco_classes - Sheet2.csv"
+
+def init_and_seed_sqlite():
+    if not os.path.exists(CSV_FILE_PATH):
+        print(f"❌ Error: Targeted CSV file '{CSV_FILE_PATH}' not found in active directory.")
+        return
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+
+        # 1. FORCE DROP THE OLD SCHEMA TO RE-INITIALIZE FRESH COLUMNS CLEANLY
+        cursor.execute("DROP TABLE IF EXISTS tray_configs;")
+        
+        # 2. CREATE FRESH SCHEMA ENFORCING PART NUMBERS
+        cursor.execute("""
+            CREATE TABLE tray_configs (
+                aruco_id INTEGER PRIMARY KEY,
+                part_number TEXT UNIQUE NOT NULL,
+                class_name TEXT NOT NULL,
+                et_rows INTEGER NOT NULL,
+                et_cols INTEGER NOT NULL,
+                ft_rows INTEGER NOT NULL,
+                ft_cols INTEGER NOT NULL
+            );
+        """)
+        
+        print("📋 Old table dropped and fresh SQLite table schema initialized successfully.")
+
+        # 3. PARSE DATA ROWS FROM CSV
+        with open(CSV_FILE_PATH, mode='r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            
+            rows_inserted = 0
+            for row in reader:
+                part_no = row.get("Part No.:", "").strip()
+                class_name = row.get("Class Name:", "").strip()
+                
+                raw_aid = row.get("Aruco ID:")
+                aruco_id = int(float(raw_aid.strip())) if raw_aid and raw_aid.strip() else 0
+                
+                raw_et_r = row.get("Empty Tray R:")
+                et_r = int(float(raw_et_r.strip())) if raw_et_r and raw_et_r.strip() else 6
+                
+                raw_et_c = row.get("Empty Tray C:")
+                et_c = int(float(raw_et_c.strip())) if raw_et_c and raw_et_c.strip() else 9
+                
+                raw_ft_r = row.get("Filling Tray R:")
+                ft_r = int(float(raw_ft_r.strip())) if raw_ft_r and raw_ft_r.strip() else 5
+                
+                raw_ft_c = row.get("Filling Tray C:")
+                ft_c = int(float(raw_ft_c.strip())) if raw_ft_c and raw_ft_c.strip() else 8
+
+                if aruco_id == 0 or not part_no or not class_name:
+                    continue
+
+                # AUTO-ORIENTATION AXIS STABILIZATION
+                if et_r > et_c: et_r, et_c = et_c, et_r
+                if ft_r > ft_c: ft_r, ft_c = ft_c, ft_r
+
+                cursor.execute("""
+                    INSERT INTO tray_configs 
+                    (aruco_id, part_number, class_name, et_rows, et_cols, ft_rows, ft_cols)
+                    VALUES (?, ?, ?, ?, ?, ?, ?);
+                """, (aruco_id, part_no, class_name, et_r, et_c, ft_r, ft_c))
+                rows_inserted += 1
+
+        conn.commit()
+        conn.close()
+        print(f"🚀 Successfully seeded {rows_inserted} fresh records into local '{DB_PATH}' file.")
+    except Exception as e:
+        print(f"🛑 Failed to execute database synchronization sequence: {str(e)}")
 
 if __name__ == "__main__":
-    init_configuration_database()
+    init_and_seed_sqlite()

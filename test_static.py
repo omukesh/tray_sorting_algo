@@ -11,7 +11,7 @@ os.environ["LC_ALL"] = "C"
 # ── CONFIGURATION PARAMETERS ─────────────────────────────────
 MODEL_PATH  = "weights/best.pt"     
 TEST_IMAGES = [
-    "input/15.jpg",
+    "input/8.png",
     # "input/2.png",
     # "input/6.png",
     #"/home/mdl/Documents/model_training/Tray_train_data/tray_final_dataset/test/images/snap_1080p_14-19-18-760.jpg"
