@@ -1,27 +1,28 @@
 # test_server.py
 import uvicorn
 import cv2
+import json
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from sqlmodel import create_engine, Session
 
-from models import EmptyTrayPayload, InspectionStage, UserData
+from models import EmptyTrayPayload, InspectionStage, UserData, SessionModel
 from main import HandleEmptyTray, HandleTray
-from seed_db import SessionModel # Import exact structural definition created above
 
-app = FastAPI(title="Tray Processing API Production Test Service Gateway")
+app = FastAPI(title="Production-Aligned Tray API Router Test Service")
 
-POSTGRES_URL = "postgresql://postgres:password@localhost:5432/tray_db"
+POSTGRES_URL = "postgresql://postgres:123456@localhost:5432/tray_db"
 engine = create_engine(POSTGRES_URL, echo=False)
 
 def get_db_session():
     with Session(engine) as session:
         yield session
 
+# Centralized Local YOLO Framework Analytics Client
 class LocalYoloClient:
     def __init__(self):
         from ultralytics import YOLO
-        self.model = YOLO("yolov8n-seg.pt")
+        self.model = YOLO("/home/mdl/Projects/tray_algo/weights/best.pt")
 
     async def get_tray_detections(self, frame: np.ndarray) -> list:
         results = self.model(frame, verbose=False)[0]
@@ -45,13 +46,34 @@ class LocalYoloClient:
 
 client_instance = LocalYoloClient()
 
-class SessionRepoShim:
+# Repository Shim wrapping operations directly to matching columns
+class ProductionSessionRepoShim:
     def __init__(self, session: Session):
         self.session = session
-        self.session_instance = None  # To mock production property injection safely
 
     def create(self, data_dict: dict):
-        record = SessionModel(**data_dict)
+        """Unpacks fields to match the exact database column structure."""
+        # Split out structural payload details from analytical responses
+        payload_data = data_dict.get("data", {})
+        
+        record = SessionModel(
+            status="PENDING",
+            part_number=data_dict.get("part_number", "PN-UNKNOWN"),
+            inspection_stage=getattr(payload_data, 'inspection_stage', InspectionStage.VIEWING).value,
+            type=getattr(payload_data, 'inspection_type', 'ROTOR'),
+            engine_no=getattr(payload_data, 'engine_no', ''),
+            engine_hours=getattr(payload_data, 'engine_hours', ''),
+            component_hours=getattr(payload_data, 'component_hours', ''),
+            product_id=getattr(payload_data, 'product_id', ''),
+            part_nomenclature=getattr(payload_data, 'part_nomenclature', ''),
+            work_order_no=getattr(payload_data, 'work_order_no', ''),
+            total_blades_quantity=getattr(payload_data, 'total_blades_quantity', 0),
+            shop_order_no=getattr(payload_data, 'shop_order_no', ''),
+            sop=getattr(payload_data, 'sop', ''),
+            phase_number=getattr(payload_data, 'phase_number', '1'),
+            phase_quantity=getattr(payload_data, 'phase_quantity', 0),
+            empty_tray_data=data_dict.get("empty_tray_data", {}) # Vision results JSON block
+        )
         self.session.add(record)
         self.session.commit()
         self.session.refresh(record)
@@ -60,12 +82,29 @@ class SessionRepoShim:
     def update(self, id, data: dict):
         record = self.session.get(SessionModel, id)
         if record:
-            for k, v in data.items():
-                setattr(record, k, v)
+            if "filled_tray_data" in data:
+                record.filled_tray_data = data["filled_tray_data"]
+                record.status = "COMPLETED"
             self.session.add(record)
             self.session.commit()
 
-@app.post("/empty-tray")
+# ----------------------------------------------------
+# MATCHING TRAYS ROUTING MODULE BOUNDARIES
+# ----------------------------------------------------
+# Create this small helper shim inside test_server.py if it isn't defined
+class ConfigRepoShim:
+    def __init__(self, session: Session):
+        self.session = session
+        
+    # Optional wrapper if your production code invokes a separate engine helper method
+    def get_session(self):
+        return self.session
+
+# ----------------------------------------------------
+# UPDATE THE ENDPOINT CORRESPONDING ROUTES
+# ----------------------------------------------------
+
+@app.post("/tray/empty-tray")
 async def process_empty_tray(
     file: UploadFile = File(...),
     part_number: str = Form(...),
@@ -89,7 +128,7 @@ async def process_empty_tray(
     np_arr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     if frame is None:
-        raise HTTPException(status_code=400, detail="Corrupted image stream matrix payload.")
+        raise HTTPException(status_code=400, detail="Corrupted image.")
 
     payload = EmptyTrayPayload(
         part_number=part_number, tray_id=tray_id, inspection_stage=inspection_stage,
@@ -99,17 +138,18 @@ async def process_empty_tray(
         shop_order_no=shop_order_no, sop=sop, phase_number=phase_number, phase_quantity=phase_quantity
     )
 
-    repo_shim = SessionRepoShim(db)
-    # Inject active engine dependency into repository property safely matching main.py requirements
-    repo_shim.session = db
+    repo_shim = ProductionSessionRepoShim(db)
     
+    # CRITICAL: We pass db directly to HandleEmptyTray if it utilizes background lookups
     handler = HandleEmptyTray(
         part_number=part_number, session_repo=repo_shim, data=payload,
         client=client_instance, minio=None, frame=frame
     )
+    # If your HandleEmptyTray uses internal async session mappings, pass 'db' here
     return await handler.inspect()
 
-@app.post("/filled-tray")
+
+@app.post("/tray/filled-tray")
 async def process_filled_tray(
     file: UploadFile = File(...),
     session_id: str = Form(...),
@@ -123,18 +163,19 @@ async def process_filled_tray(
     if frame is None:
         raise HTTPException(status_code=400, detail="Corrupted image matrix.")
 
-    import json
     user_payload = UserData(tray_id="", slots=json.loads(user_slots))
 
-    repo_shim = SessionRepoShim(db)
-    repo_shim.session = db
+    session_repo = ProductionSessionRepoShim(db)
     
+    # CRITICAL FIX: Pass the session directly into the configuration repo parameter
+    # instead of 'None' so it can execute database queries downstream
     handler = HandleTray(
-        session_id=session_id, part_number=part_number, session_repo=repo_shim,
-        config_repo=None, data_repo=None, minio=None, client=client_instance,
+        session_id=session_id, part_number=part_number, session_repo=session_repo,
+        config_repo=db, data_repo=db, minio=None, client=client_instance,
         user_data=user_payload, image=frame
     )
     return await handler.handle()
+
 
 if __name__ == "__main__":
     uvicorn.run("test_server:app", host="127.0.0.1", port=8000, reload=True)
