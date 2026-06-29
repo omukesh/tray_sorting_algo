@@ -18,11 +18,10 @@ def get_db_session():
     with Session(engine) as session:
         yield session
 
-# Centralized Local YOLO Framework Analytics Client
 class LocalYoloClient:
     def __init__(self):
         from ultralytics import YOLO
-        self.model = YOLO("/home/mdl/Projects/tray_algo/weights/best.pt")
+        self.model = YOLO("weights/best.pt")
 
     async def get_tray_detections(self, frame: np.ndarray) -> list:
         results = self.model(frame, verbose=False)[0]
@@ -46,16 +45,12 @@ class LocalYoloClient:
 
 client_instance = LocalYoloClient()
 
-# Repository Shim wrapping operations directly to matching columns
 class ProductionSessionRepoShim:
     def __init__(self, session: Session):
         self.session = session
 
     def create(self, data_dict: dict):
-        """Unpacks fields to match the exact database column structure."""
-        # Split out structural payload details from analytical responses
         payload_data = data_dict.get("data", {})
-        
         record = SessionModel(
             status="PENDING",
             part_number=data_dict.get("part_number", "PN-UNKNOWN"),
@@ -72,7 +67,7 @@ class ProductionSessionRepoShim:
             sop=getattr(payload_data, 'sop', ''),
             phase_number=getattr(payload_data, 'phase_number', '1'),
             phase_quantity=getattr(payload_data, 'phase_quantity', 0),
-            empty_tray_data=data_dict.get("empty_tray_data", {}) # Vision results JSON block
+            empty_tray_data=data_dict.get("empty_tray_data", {})
         )
         self.session.add(record)
         self.session.commit()
@@ -88,27 +83,10 @@ class ProductionSessionRepoShim:
             self.session.add(record)
             self.session.commit()
 
-# ----------------------------------------------------
-# MATCHING TRAYS ROUTING MODULE BOUNDARIES
-# ----------------------------------------------------
-# Create this small helper shim inside test_server.py if it isn't defined
-class ConfigRepoShim:
-    def __init__(self, session: Session):
-        self.session = session
-        
-    # Optional wrapper if your production code invokes a separate engine helper method
-    def get_session(self):
-        return self.session
-
-# ----------------------------------------------------
-# UPDATE THE ENDPOINT CORRESPONDING ROUTES
-# ----------------------------------------------------
-
 @app.post("/tray/empty-tray")
 async def process_empty_tray(
     file: UploadFile = File(...),
     part_number: str = Form(...),
-    tray_id: str = Form(...),
     inspection_stage: InspectionStage = Form(...),
     inspection_type: str = Form(...),
     engine_no: str = Form(...),
@@ -128,10 +106,10 @@ async def process_empty_tray(
     np_arr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     if frame is None:
-        raise HTTPException(status_code=400, detail="Corrupted image.")
+        raise HTTPException(status_code=400, detail="Corrupted image buffer.")
 
     payload = EmptyTrayPayload(
-        part_number=part_number, tray_id=tray_id, inspection_stage=inspection_stage,
+        part_number=part_number, tray_id="DYNAMIC_DISCOVERY", inspection_stage=inspection_stage,
         inspection_type=inspection_type, engine_no=engine_no, engine_hours=engine_hours,
         component_hours=component_hours, product_id=product_id, part_nomenclature=part_nomenclature,
         work_order_no=work_order_no, total_blades_quantity=total_blades_quantity,
@@ -139,15 +117,14 @@ async def process_empty_tray(
     )
 
     repo_shim = ProductionSessionRepoShim(db)
+    # Forward the session engine hook into the property context
+    repo_shim.session = db
     
-    # CRITICAL: We pass db directly to HandleEmptyTray if it utilizes background lookups
     handler = HandleEmptyTray(
         part_number=part_number, session_repo=repo_shim, data=payload,
         client=client_instance, minio=None, frame=frame
     )
-    # If your HandleEmptyTray uses internal async session mappings, pass 'db' here
     return await handler.inspect()
-
 
 @app.post("/tray/filled-tray")
 async def process_filled_tray(
@@ -161,21 +138,18 @@ async def process_filled_tray(
     np_arr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
     if frame is None:
-        raise HTTPException(status_code=400, detail="Corrupted image matrix.")
+        raise HTTPException(status_code=400, detail="Corrupted image buffer.")
 
     user_payload = UserData(tray_id="", slots=json.loads(user_slots))
-
     session_repo = ProductionSessionRepoShim(db)
     
-    # CRITICAL FIX: Pass the session directly into the configuration repo parameter
-    # instead of 'None' so it can execute database queries downstream
+    # CRITICAL: config_repo parameter receives 'db' instead of 'None'
     handler = HandleTray(
         session_id=session_id, part_number=part_number, session_repo=session_repo,
         config_repo=db, data_repo=db, minio=None, client=client_instance,
         user_data=user_payload, image=frame
     )
     return await handler.handle()
-
 
 if __name__ == "__main__":
     uvicorn.run("test_server:app", host="127.0.0.1", port=8000, reload=True)

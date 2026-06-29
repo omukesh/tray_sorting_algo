@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 import cv2
+import asyncio
 import numpy as np
 from sklearn.cluster import KMeans
 from sqlmodel import select
@@ -18,17 +19,35 @@ ROI_BOOLEAN: Tuple[int, int, int, int] = (180, 780, 500, 315)
 ROI_POINTER: Tuple[int, int, int, int] = (1400, 780, 500, 315)
 
 
-async def fetch_tray_config_by_id(session, aruco_id: int) -> Optional[dict]:
-    """Reads layout configurations safely from our seeded local configuration store."""
-    try:
-        # Use standard select query format matching your production wrapper pipeline exactly
-        stmt = select(TrayConfig).where(TrayConfig.aruco_id == aruco_id)
-        result = session.execute(stmt) if not hasattr(session, "exec") else await session.exec(stmt)
+async def fetch_tray_config_by_id(session: Any, identifier: Union[int, str]) -> Optional[Dict[str, Any]]:
+    """
+    Unified synchronous lookup layer.
+    """
+    if session is None or identifier is None:
+        return None
+        
+    def sync_query():
+        if isinstance(identifier, int):
+            stmt = select(TrayConfig).where(TrayConfig.aruco_id == identifier)
+        else:
+            stmt = select(TrayConfig).where(TrayConfig.part_number == str(identifier).strip())
+            
+        # Execute synchronously to prevent ScalarResult await crashes
+        result = session.execute(stmt)
         row = result.first()
         
+        if row and isinstance(row, tuple):
+            row = row[0]
+        return row
+
+    try:
+        # Offload the synchronous query to a background thread and await its completion safely!
+        loop = asyncio.get_running_loop()
+        row = await loop.run_in_executor(None, sync_query)
+
         if row:
-            # Return identical structural shape required downstream by TrayAnalyzer
             return {
+                "aruco_id": row.aruco_id,
                 "part_number": row.part_number,
                 "class_name": row.class_name,
                 "et_rows": row.et_rows,
@@ -37,7 +56,8 @@ async def fetch_tray_config_by_id(session, aruco_id: int) -> Optional[dict]:
                 "ft_cols": row.ft_cols
             }
     except Exception as e:
-        print(f"[Critical] Error fetching layout config dynamically: {str(e)}")
+        print(f"[Critical] Error fetching layout config asynchronously: {str(e)}")
+        
     return None
     
 def is_inside_roi(center: Tuple[int, int], roi: Tuple[int, int, int, int]) -> bool:
@@ -127,40 +147,45 @@ def analyze_grid(grid: List[List[Optional[Dict]]], tray_type: int, expected_blad
     rows, cols = len(grid), len(grid[0])
     occupancy, blades, missing_elements = [], [], []
     
-    for rb in range(rows):
-        rt = rows - 1 - rb
-        row_data = []
-        for c in range(cols):
+    # COLUMN-MAJOR REVOLUTION: Put the column loop on the outside!
+    for c in range(cols):
+        col_data = []
+        for rb in range(rows):
+            # Maintain your bottom-to-top industrial tracking indexing standard
+            rt = rows - 1 - rb
             cell = grid[rt][c]
             slot_id = c * rows + rb + 1
             
             if cell is None:
-                row_data.append(MISSING_MARK)
+                col_data.append(MISSING_MARK)
                 missing_elements.append(slot_id)
                 continue
                 
             cls = cell["cls"]
             if tray_type == 0:
-                if cls == "slot_empty": row_data.append(0)
+                if cls == "slot_empty": col_data.append(0)
                 elif cls == "blade_generic":
-                    row_data.append(1)
+                    col_data.append(1)
                     blades.append(slot_id)
-                else: row_data.append(0)
+                else: col_data.append(0)
             else:
-                if cls == "slot": row_data.append(0)
+                if cls == "slot": col_data.append(0)
                 elif cls == expected_blade_class:
-                    row_data.append(1)
+                    col_data.append(1)
                     blades.append(slot_id)
                 elif is_filling_blade_class(cls):
-                    row_data.append(1)
+                    col_data.append(1)
                     blades.append(slot_id)
                 elif cls == "missing_inference_void":
-                    row_data.append(MISSING_MARK)
+                    col_data.append(MISSING_MARK)
                     missing_elements.append(slot_id)
-                else: row_data.append(0)
+                else: col_data.append(0)
                     
-            cell["computed_slot_id"] = slot_id
-        occupancy.append(row_data)
+            if cell:
+                cell["computed_slot_id"] = slot_id
+                
+        # Append the entire column array block completely down to the main grid
+        occupancy.append(col_data)
         
     return occupancy, blades, len(missing_elements) > 0, sorted(missing_elements)
 
